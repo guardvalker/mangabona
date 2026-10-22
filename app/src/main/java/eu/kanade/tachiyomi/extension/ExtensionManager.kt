@@ -4,6 +4,7 @@ import android.content.Context
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.interactor.TrustExtension
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.api.ExtensionUpdateNotifier
@@ -28,11 +29,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import logcat.LogPriority
 import mihon.core.metro.AppCoroutineScope
 import mihon.domain.extension.interactor.UpdateExtensionStores
@@ -42,6 +45,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
 import java.util.Locale
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * The manager of extensions installed as another apk which extend the available sources. It handles
@@ -56,6 +60,7 @@ class ExtensionManager(
     @AppCoroutineScope private val scope: CoroutineScope,
     private val context: Context,
     private val preferences: SourcePreferences,
+    private val basePreferences: BasePreferences,
     private val trustExtension: TrustExtension,
     private val extensionStoreRepository: ExtensionStoreRepository,
     private val updateExtensionStores: UpdateExtensionStores,
@@ -212,11 +217,33 @@ class ExtensionManager(
         initialized.await()
         setAvailableExtensions(extensions)
 
-        val names = (loadedExtensionMapFlow.value.values + notLoadedExtensionMapFlow.value.values)
-            .filter { it.hasUpdate }
-            .map { it.name }
+        if (preferences.autoUpdateExtensions.get() &&
+            // The legacy installer needs the user to confirm each install
+            basePreferences.extensionInstaller.get() != BasePreferences.ExtensionInstaller.LEGACY
+        ) {
+            updateAllInstalled()
+        }
+
+        val names = installedWithUpdate().map { it.name }
         if (names.isNotEmpty()) {
             extensionUpdateNotifier.promptUpdates(names)
+        }
+    }
+
+    private fun installedWithUpdate(): List<Extension.Installed> {
+        return (loadedExtensionMapFlow.value.values + notLoadedExtensionMapFlow.value.values)
+            .filter { it.hasUpdate }
+    }
+
+    /**
+     * Installs every pending update one after another. An update that fails or doesn't finish in time is
+     * skipped and stays pending, so it ends up in the notification instead.
+     */
+    private suspend fun updateAllInstalled() {
+        for (extension in installedWithUpdate()) {
+            withTimeoutOrNull(UPDATE_TIMEOUT) {
+                updateExtension(extension).takeWhile { !it.isCompleted() }.collect {}
+            }
         }
     }
 
@@ -439,3 +466,5 @@ class ExtensionManager(
         return onStart { initialized.await() }.map { it.values.toList() }
     }
 }
+
+private val UPDATE_TIMEOUT = 2.minutes

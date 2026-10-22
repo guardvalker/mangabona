@@ -55,6 +55,11 @@ object SettingsBrowseScreen : SearchableSettings {
             Preference.PreferenceGroup(
                 title = stringResource(MR.strings.pref_category_extensions),
                 preferenceItems = listOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = sourcePreferences.autoUpdateExtensions,
+                        title = stringResource(MR.strings.pref_auto_update_extensions),
+                        subtitle = stringResource(MR.strings.pref_auto_update_extensions_summary),
+                    ),
                     Preference.PreferenceItem.MultiSelectListPreference(
                         preference = sourcePreferences.enabledContentWarnings,
                         entries = mapOf(
