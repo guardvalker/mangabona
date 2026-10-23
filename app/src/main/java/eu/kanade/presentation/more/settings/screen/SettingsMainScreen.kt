@@ -28,7 +28,6 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
-import eu.kanade.presentation.more.settings.screen.about.AboutScreen
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.util.LocalBackPress
 import eu.kanade.presentation.util.Screen
@@ -38,7 +37,6 @@ import mihon.icons.materialsymbols.rounded.Code
 import mihon.icons.materialsymbols.rounded.CollectionsBookmark
 import mihon.icons.materialsymbols.rounded.Download
 import mihon.icons.materialsymbols.rounded.Explore
-import mihon.icons.materialsymbols.rounded.Info
 import mihon.icons.materialsymbols.rounded.Palette
 import mihon.icons.materialsymbols.rounded.Search
 import mihon.icons.materialsymbols.rounded.Security
@@ -224,14 +222,6 @@ object SettingsMainScreen : Screen() {
             subtitleRes = MR.strings.pref_advanced_summary,
             icon = MaterialSymbols.Rounded.Code,
             screen = SettingsAdvancedScreen,
-        ),
-        Item(
-            titleRes = MR.strings.pref_category_about,
-            formatSubtitle = {
-                "${stringResource(MR.strings.app_name)} ${AboutScreen.getVersionName(withBuildDate = false)}"
-            },
-            icon = MaterialSymbols.Rounded.Info,
-            screen = AboutScreen,
         ),
     )
 }

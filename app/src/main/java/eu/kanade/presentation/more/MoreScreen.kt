@@ -3,13 +3,11 @@ package eu.kanade.presentation.more
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
 import mihon.icons.materialsymbols.MaterialSymbols
-import mihon.icons.materialsymbols.automirroredrounded.Help
 import mihon.icons.materialsymbols.automirroredrounded.Label
 import mihon.icons.materialsymbols.rounded.CloudOff
 import mihon.icons.materialsymbols.rounded.Download
@@ -18,8 +16,6 @@ import mihon.icons.materialsymbols.rounded.Info
 import mihon.icons.materialsymbols.rounded.QueryStats
 import mihon.icons.materialsymbols.rounded.Settings
 import mihon.icons.materialsymbols.rounded.Storage
-import mihon.icons.materialsymbols.roundedfilled.VolunteerActivism
-import tachiyomi.core.common.Constants
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -38,11 +34,8 @@ fun MoreScreen(
     onClickStats: () -> Unit,
     onClickDataAndStorage: () -> Unit,
     onClickSettings: () -> Unit,
-    onClickSupport: () -> Unit,
     onClickAbout: () -> Unit,
 ) {
-    val uriHandler = LocalUriHandler.current
-
     Scaffold { contentPadding ->
         ScrollbarLazyColumn(contentPadding = contentPadding) {
             item {
@@ -133,23 +126,9 @@ fun MoreScreen(
             }
             item {
                 TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_support_us),
-                    icon = MaterialSymbols.RoundedFilled.VolunteerActivism,
-                    onPreferenceClick = onClickSupport,
-                )
-            }
-            item {
-                TextPreferenceWidget(
                     title = stringResource(MR.strings.pref_category_about),
                     icon = MaterialSymbols.Rounded.Info,
                     onPreferenceClick = onClickAbout,
-                )
-            }
-            item {
-                TextPreferenceWidget(
-                    title = stringResource(MR.strings.label_help),
-                    icon = MaterialSymbols.AutoMirroredRounded.Help,
-                    onPreferenceClick = { uriHandler.openUri(Constants.URL_HELP) },
                 )
             }
         }

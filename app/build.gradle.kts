@@ -37,8 +37,8 @@ android {
     defaultConfig {
         applicationId = "com.guardvalker.mangabona"
 
-        versionCode = 108
-        versionName = "1.2.0"
+        versionCode = 109
+        versionName = "1.3.0"
 
         buildConfigField("boolean", "TELEMETRY_INCLUDED", "${Config.includeTelemetry}")
         buildConfigField("boolean", "UPDATER_ENABLED", "${Config.enableUpdater}")
