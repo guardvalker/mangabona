@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.core.common.preference.getAndSet
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -61,6 +62,10 @@ class ExtensionsViewModel(
     val updatesCount = preferences.extensionUpdatesCount.changes()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), 0)
 
+    // Public so the extensions list can mark pinned rows without being part of the whole state.
+    val pinnedSources = preferences.pinnedSources.changes()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5.seconds), preferences.pinnedSources.get())
+
     private val isRefreshing = MutableStateFlow(false)
 
     private fun extensionMapper(map: Map<String, InstallStep>): (Extension) -> ExtensionUiModel.Item = {
@@ -75,7 +80,8 @@ class ExtensionsViewModel(
             .map { searchQueryPredicate(it ?: "") },
         currentDownloads,
         getExtensions.subscribe(),
-    ) { predicate, downloads, (_updates, _loaded, _available, _notLoaded) ->
+        preferences.pinnedSources.changes(),
+    ) { predicate, downloads, (_updates, _loaded, _available, _notLoaded), pinned ->
         buildMap {
             val updates = _updates.filter(predicate).map(extensionMapper(downloads))
             if (updates.isNotEmpty()) {
@@ -87,7 +93,10 @@ class ExtensionsViewModel(
                 put(ExtensionUiModel.Header.Resource(MR.strings.ext_not_loaded), notLoaded)
             }
 
-            val loaded = _loaded.filter(predicate).map(extensionMapper(downloads))
+            // Pinned extensions go first
+            val loaded = _loaded.filter(predicate)
+                .sortedByDescending { extension -> extension.sources.any { it.id.toString() in pinned } }
+                .map(extensionMapper(downloads))
             if (loaded.isNotEmpty()) {
                 put(ExtensionUiModel.Header.Resource(MR.strings.ext_installed), loaded)
             }
@@ -172,6 +181,16 @@ class ExtensionsViewModel(
                 .filterIsInstance<Extension.Installed>()
                 .filter { it.hasUpdate }
                 .forEach(::updateExtension)
+        }
+    }
+
+    /**
+     * Pins all the sources of the extension, or unpins them when they already are all pinned.
+     */
+    fun togglePin(extension: Extension.Loaded) {
+        val ids = extension.sources.map { it.id.toString() }.toSet()
+        preferences.pinnedSources.getAndSet { pinned ->
+            if (pinned.containsAll(ids)) pinned - ids else pinned + ids
         }
     }
 

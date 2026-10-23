@@ -57,14 +57,17 @@ import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.rounded.Close
 import mihon.icons.materialsymbols.rounded.Download
 import mihon.icons.materialsymbols.rounded.Info
+import mihon.icons.materialsymbols.rounded.Keep
 import mihon.icons.materialsymbols.rounded.Public
 import mihon.icons.materialsymbols.rounded.Refresh
 import mihon.icons.materialsymbols.rounded.Settings
 import mihon.icons.materialsymbols.rounded.VerifiedUser
+import mihon.icons.materialsymbols.roundedfilled.Keep
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
+import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
 import tachiyomi.presentation.core.i18n.stringResource
@@ -87,6 +90,9 @@ fun ExtensionScreen(
     onUpdateExtension: (Extension.Installed) -> Unit,
     onTrustExtension: (Extension.NotLoaded) -> Unit,
     onOpenExtension: (Extension.Loaded) -> Unit,
+    onOpenLatest: (Extension.Loaded) -> Unit,
+    pinnedSources: Set<String>,
+    onClickPin: (Extension.Loaded) -> Unit,
     onClickUpdateAll: () -> Unit,
     onRefresh: () -> Unit,
 ) {
@@ -129,6 +135,9 @@ fun ExtensionScreen(
                     onUpdateExtension = onUpdateExtension,
                     onTrustExtension = onTrustExtension,
                     onOpenExtension = onOpenExtension,
+                    onOpenLatest = onOpenLatest,
+                    pinnedSources = pinnedSources,
+                    onClickPin = onClickPin,
                     onClickUpdateAll = onClickUpdateAll,
                 )
             }
@@ -148,6 +157,9 @@ private fun ExtensionContent(
     onUpdateExtension: (Extension.Installed) -> Unit,
     onTrustExtension: (Extension.NotLoaded) -> Unit,
     onOpenExtension: (Extension.Loaded) -> Unit,
+    onOpenLatest: (Extension.Loaded) -> Unit,
+    pinnedSources: Set<String>,
+    onClickPin: (Extension.Loaded) -> Unit,
     onClickUpdateAll: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -222,12 +234,14 @@ private fun ExtensionContent(
                     onClickItem = {
                         when (it) {
                             is Extension.Available -> onInstallExtension(it)
-                            is Extension.Loaded -> onOpenExtension(it)
+                            is Extension.Loaded -> onOpenLatest(it)
                             is Extension.NotLoaded -> {
                                 notLoadedState = it
                             }
                         }
                     },
+                    pinnedSources = pinnedSources,
+                    onClickPin = onClickPin,
                     onLongClickItem = onLongClickItem,
                     onClickItemSecondaryAction = {
                         when (it) {
@@ -297,6 +311,8 @@ private fun ExtensionItem(
     onClickItemCancel: (Extension) -> Unit,
     onClickItemAction: (Extension) -> Unit,
     onClickItemSecondaryAction: (Extension) -> Unit,
+    pinnedSources: Set<String>,
+    onClickPin: (Extension.Loaded) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val (extension, installStep) = item
@@ -319,6 +335,8 @@ private fun ExtensionItem(
                 onClickItemCancel = onClickItemCancel,
                 onClickItemAction = onClickItemAction,
                 onClickItemSecondaryAction = onClickItemSecondaryAction,
+                pinnedSources = pinnedSources,
+                onClickPin = onClickPin,
             )
         },
     ) {
@@ -459,6 +477,8 @@ private fun ExtensionItemActions(
     onClickItemCancel: (Extension) -> Unit = {},
     onClickItemAction: (Extension) -> Unit = {},
     onClickItemSecondaryAction: (Extension) -> Unit = {},
+    pinnedSources: Set<String> = emptySet(),
+    onClickPin: (Extension.Loaded) -> Unit = {},
 ) {
     Row(
         modifier = modifier,
@@ -490,6 +510,22 @@ private fun ExtensionItemActions(
         secondaryAction?.let { (icon, label) ->
             IconButton(onClick = { onClickItemSecondaryAction(extension) }) {
                 Icon(imageVector = icon, contentDescription = stringResource(label))
+            }
+        }
+
+        // Right next to the settings gear
+        if (extension is Extension.Loaded && extension.sources.isNotEmpty()) {
+            val isPinned = extension.sources.all { it.id.toString() in pinnedSources }
+            IconButton(onClick = { onClickPin(extension) }) {
+                Icon(
+                    imageVector = if (isPinned) MaterialSymbols.RoundedFilled.Keep else MaterialSymbols.Rounded.Keep,
+                    tint = if (isPinned) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onBackground.copy(alpha = SECONDARY_ALPHA)
+                    },
+                    contentDescription = stringResource(if (isPinned) MR.strings.action_unpin else MR.strings.action_pin),
+                )
             }
         }
 
