@@ -12,6 +12,8 @@ import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Looper
+import android.os.Handler
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -359,15 +361,17 @@ class ReaderActivity : BaseActivity() {
      */
     private fun hopTo(row: ReaderViewModel.HopRow) {
         val chapter = row.chapter ?: return
-        startActivity(
-            ReaderActivity.newIntent(
-                context = this,
-                mangaId = row.manga.id,
-                chapterId = chapter.id,
-                hopKey = viewModel.hopKey,
-                hopPage = viewModel.currentPageIndex(),
-            ),
-        )
+        val intent = ReaderActivity.newIntent(
+            context = this,
+            mangaId = row.manga.id,
+            chapterId = chapter.id,
+            hopKey = viewModel.hopKey,
+            hopPage = viewModel.currentPageIndex(),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val appContext = applicationContext
+        // The activity is singleTask: starting it while this one is alive would just deliver the intent here and the
+        // finish() below would close it. Let this one go away first.
+        Handler(Looper.getMainLooper()).postDelayed({ appContext.startActivity(intent) }, 300)
         finish()
     }
 
