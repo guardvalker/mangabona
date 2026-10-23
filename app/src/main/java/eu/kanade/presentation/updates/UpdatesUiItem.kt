@@ -143,7 +143,7 @@ internal fun LazyListScope.updatesUiItems(
     }
 }
 
-private const val UNREAD_BACKGROUND_ALPHA = .10f
+private const val UNREAD_BACKGROUND_ALPHA = .05f
 private const val READ_COVER_ALPHA = .5f
 
 @Composable
