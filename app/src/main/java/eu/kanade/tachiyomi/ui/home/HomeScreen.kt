@@ -39,7 +39,6 @@ import eu.kanade.tachiyomi.ui.history.HistoryTab
 import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.more.MoreTab
-import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -65,7 +64,6 @@ object HomeScreen : Screen() {
 
     private val TABS = listOf(
         LibraryTab,
-        UpdatesTab,
         HistoryTab,
         BrowseTab,
         MoreTab,
@@ -134,6 +132,7 @@ object HomeScreen : Screen() {
             LaunchedEffect(Unit) {
                 launch {
                     librarySearchEvent.receiveAsFlow().collectLatest {
+                        LibraryTab.showingUpdates = false
                         goToLibraryTab()
                         LibraryTab.search(it)
                     }
@@ -141,8 +140,14 @@ object HomeScreen : Screen() {
                 launch {
                     openTabEvent.receiveAsFlow().collectLatest {
                         tabNavigator.current = when (it) {
-                            is Tab.Library -> LibraryTab
-                            Tab.Updates -> UpdatesTab
+                            is Tab.Library -> {
+                                LibraryTab.showingUpdates = false
+                                LibraryTab
+                            }
+                            Tab.Updates -> {
+                                LibraryTab.showingUpdates = true
+                                LibraryTab
+                            }
                             Tab.History -> HistoryTab
                             is Tab.Browse -> {
                                 if (it.toExtensions) {
@@ -208,7 +213,7 @@ object HomeScreen : Screen() {
         val count by produceState(initialValue = 0, tab) {
             val graph = context.appGraph
             when (tab) {
-                is UpdatesTab -> {
+                is LibraryTab -> {
                     combine(
                         graph.libraryPreferences.newShowUpdatesCount.changes(),
                         graph.libraryPreferences.newUpdatesCount.changes(),
@@ -230,7 +235,7 @@ object HomeScreen : Screen() {
         return {
             Badge {
                 val desc = when (tab) {
-                    is UpdatesTab -> pluralStringResource(
+                    is LibraryTab -> pluralStringResource(
                         MR.plurals.notification_chapters_generic,
                         count = count,
                         count,

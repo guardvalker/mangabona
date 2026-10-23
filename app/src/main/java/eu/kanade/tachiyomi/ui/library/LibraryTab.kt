@@ -11,8 +11,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +44,7 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.updates.UpdatesTab
 import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
@@ -76,12 +79,30 @@ data object LibraryTab : Tab {
             )
         }
 
+    /**
+     * This tab holds two views: the recent updates feed (the one shown first) and the whole library grid.
+     */
+    var showingUpdates by mutableStateOf(true)
+
     override suspend fun onReselect(navigator: Navigator) {
-        requestOpenSettingsSheet()
+        if (showingUpdates) {
+            UpdatesTab.onReselect(navigator)
+        } else {
+            requestOpenSettingsSheet()
+        }
     }
 
     @Composable
     override fun Content() {
+        if (showingUpdates) {
+            UpdatesTab.Content()
+        } else {
+            LibraryContent()
+        }
+    }
+
+    @Composable
+    private fun LibraryContent() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
@@ -135,6 +156,7 @@ data object LibraryTab : Tab {
                             }
                         }
                     },
+                    onClickShowUpdates = { showingUpdates = true },
                     searchQuery = state.searchQuery,
                     onSearchQueryChange = viewModel::search,
                     // For scroll overlay when no tab

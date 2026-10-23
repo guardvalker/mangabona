@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.rounded.CalendarMonth
+import mihon.icons.materialsymbols.rounded.CollectionsBookmark
 import mihon.icons.materialsymbols.rounded.FilterList
 import mihon.icons.materialsymbols.rounded.FlipToBack
 import mihon.icons.materialsymbols.rounded.Refresh
@@ -62,6 +63,7 @@ fun UpdateScreen(
     onUpdateSelected: (UpdatesItem, Boolean, Boolean) -> Unit,
     onOpenChapter: (UpdatesItem) -> Unit,
     onFilterClicked: () -> Unit,
+    onLibraryClicked: () -> Unit,
     hasActiveFilters: Boolean,
 ) {
     BackHandler(enabled = state.selectionMode) {
@@ -76,6 +78,7 @@ fun UpdateScreen(
                 onCalendarClicked = { onCalendarClicked() },
                 onUpdateLibrary = { scope.launch { onUpdateLibrary() } },
                 onFilterClicked = { onFilterClicked() },
+                onLibraryClicked = onLibraryClicked,
                 hasFilters = hasActiveFilters,
                 actionModeCounter = state.selected.size,
                 onSelectAll = { onSelectAll(true) },
@@ -157,6 +160,7 @@ private fun UpdatesAppBar(
     onCalendarClicked: () -> Unit,
     onUpdateLibrary: () -> Unit,
     onFilterClicked: () -> Unit,
+    onLibraryClicked: () -> Unit,
     hasFilters: Boolean,
     // For action mode
     actionModeCounter: Int,
@@ -172,6 +176,11 @@ private fun UpdatesAppBar(
         actions = {
             AppBarActions(
                 listOf(
+                    AppBar.Action(
+                        title = stringResource(MR.strings.label_library),
+                        icon = MaterialSymbols.Rounded.CollectionsBookmark,
+                        onClick = onLibraryClicked,
+                    ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_filter),
                         icon = MaterialSymbols.Rounded.FilterList,
