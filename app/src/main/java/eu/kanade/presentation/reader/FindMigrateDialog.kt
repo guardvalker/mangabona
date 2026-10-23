@@ -8,9 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,13 +44,14 @@ fun FindMigrateDialog(
             Column {
                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                     // Sources that have the chapter first, the others stay at the bottom as information
-                    items(state.rows.sortedBy { it.chapter == null && !it.isCurrent }) { row ->
+                    itemsIndexed(state.rows.sortedBy { it.chapter == null && !it.isCurrent }) { index, row ->
                         val enabled = row.chapter != null && !row.isCurrent
+                        if (index > 0) HorizontalDivider()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable(enabled = enabled) { onClickRow(row) }
-                                .padding(vertical = 8.dp)
+                                .padding(vertical = 10.dp)
                                 .alpha(if (row.chapter == null) 0.5f else 1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -57,15 +59,23 @@ fun FindMigrateDialog(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = row.sourceName,
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = row.manga.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = when {
                                         row.isCurrent -> stringResource(MR.strings.find_and_migrate_current)
                                         row.chapter == null -> stringResource(MR.strings.find_and_migrate_no_chapter)
-                                        else -> "${row.manga.title} · ${row.chapter.name}"
+                                        else -> row.chapter.name
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
