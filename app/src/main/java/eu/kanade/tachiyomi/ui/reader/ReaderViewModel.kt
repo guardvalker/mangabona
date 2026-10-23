@@ -63,6 +63,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -78,6 +79,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.core.metro.AppCoroutineScope
+import mihon.domain.migration.usecases.MigrateMangaUseCase
+import mihon.feature.migration.hop.ChapterHopFinder
+import mihon.feature.migration.hop.HopCandidate
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -129,6 +133,8 @@ class ReaderViewModel(
     private val coverCache: CoverCache,
     private val chapterCache: ChapterCache,
     private val downloadCache: DownloadCache,
+    private val hopFinder: ChapterHopFinder,
+    private val migrateManga: MigrateMangaUseCase,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -152,6 +158,21 @@ class ReaderViewModel(
     private val initialChapterId = savedState.get<Long>("chapter") ?: -1L
 
     val hasValidArgs = mangaId != -1L && initialChapterId != -1L
+
+    /**
+     * Identifies the Find & migrate search this reader belongs to. A reader opened by hopping to another source keeps
+     * the key of the one it came from, so the search results are shared instead of searched again.
+     */
+    val hopKey = savedState.get<String>("hop_key") ?: mangaId.toString()
+
+    /**
+     * Page to open the initial chapter at when hopping from another source.
+     */
+    private var pendingHopPage = savedState.get<Int>("hop_page") ?: -1
+
+    val hopState: StateFlow<HopState>
+        field = MutableStateFlow(HopState())
+    private var hopJob: Job? = null
 
     private val eventChannel = Channel<Event>()
     val eventFlow = eventChannel.receiveAsFlow()
@@ -308,6 +329,9 @@ class ReaderViewModel(
                 if (chapterPageIndex >= 0) {
                     // Restore from SavedState
                     currentChapter.requestedPage = chapterPageIndex
+                } else if (pendingHopPage >= 0 && currentChapter.chapter.id == initialChapterId) {
+                    currentChapter.requestedPage = pendingHopPage
+                    pendingHopPage = -1
                 } else if (!currentChapter.chapter.read) {
                     currentChapter.requestedPage = currentChapter.chapter.lastPageRead
                 }
@@ -944,6 +968,59 @@ class ReaderViewModel(
         mutableState.update { it.copy(dialog = null) }
     }
 
+    fun openFindMigrateDialog() {
+        val manga = manga ?: return
+        val chapter = state.value.currentChapter?.chapter ?: return
+        mutableState.update { it.copy(dialog = Dialog.FindMigrate) }
+
+        hopJob?.cancel()
+        hopState.value = HopState(searching = true)
+        hopJob = viewModelScope.launch(Dispatchers.IO) {
+            val cached = hopFinder.cached(hopKey)
+            if (cached != null) {
+                hopState.update { it.copy(rows = cached.map { c -> resolveHopRow(c, chapter) }, searching = false) }
+                return@launch
+            }
+            hopFinder.search(hopKey, manga).collect { candidate ->
+                val row = resolveHopRow(candidate, chapter)
+                hopState.update { it.copy(rows = it.rows + row) }
+            }
+            hopState.update { it.copy(searching = false) }
+        }
+    }
+
+    private suspend fun resolveHopRow(candidate: HopCandidate, chapter: Chapter): HopRow {
+        val manga = getManga.await(candidate.manga.id) ?: candidate.manga
+        return HopRow(
+            manga = manga,
+            sourceName = candidate.sourceName,
+            chapter = hopFinder.findChapter(manga, chapter.chapterNumber, chapter.name),
+            isCurrent = manga.id == mangaId,
+        )
+    }
+
+    fun requestHopMigrate(row: HopRow?) {
+        hopState.update { it.copy(migrateConfirm = row) }
+    }
+
+    /**
+     * Replaces the library entry among the rows with [target].
+     */
+    fun migrateHopTo(target: HopRow) {
+        val current = hopState.value.rows.firstOrNull { it.manga.favorite }?.manga ?: return
+        hopState.update { it.copy(migrateConfirm = null, searching = true) }
+        viewModelScope.launch(Dispatchers.IO) {
+            migrateManga(current, target.manga, replace = true)
+            val rows = hopState.value.rows.map { it.copy(manga = getManga.await(it.manga.id) ?: it.manga) }
+            hopState.update { it.copy(searching = false, rows = rows) }
+        }
+    }
+
+    /**
+     * Index of the page being read, to open the same page in the source hopped to.
+     */
+    fun currentPageIndex() = (state.value.currentPage - 1).coerceAtLeast(0)
+
     fun setBrightnessOverlayValue(value: Int) {
         mutableState.update { it.copy(brightnessOverlayValue = value) }
     }
@@ -1131,8 +1208,24 @@ class ReaderViewModel(
         data object Settings : Dialog
         data object ReadingModeSelect : Dialog
         data object OrientationModeSelect : Dialog
+        data object FindMigrate : Dialog
         data class PageActions(val page: ReaderPage) : Dialog
     }
+
+    @Immutable
+    data class HopRow(
+        val manga: Manga,
+        val sourceName: String,
+        val chapter: Chapter?,
+        val isCurrent: Boolean,
+    )
+
+    @Immutable
+    data class HopState(
+        val rows: List<HopRow> = emptyList(),
+        val searching: Boolean = false,
+        val migrateConfirm: HopRow? = null,
+    )
 
     sealed interface Event {
         data object ReloadViewerChapters : Event

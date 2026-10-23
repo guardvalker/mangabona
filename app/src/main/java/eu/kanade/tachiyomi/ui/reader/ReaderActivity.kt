@@ -47,6 +47,7 @@ import com.google.android.material.transition.platform.MaterialContainerTransfor
 import dev.zacsweers.metro.Inject
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.presentation.reader.DisplayRefreshHost
+import eu.kanade.presentation.reader.FindMigrateDialog
 import eu.kanade.presentation.reader.OrientationSelectDialog
 import eu.kanade.presentation.reader.ReaderContentOverlay
 import eu.kanade.presentation.reader.ReaderPageActionsDialog
@@ -106,10 +107,20 @@ class ReaderActivity : BaseActivity() {
     private val graph: AppGraph by lazy { metroGraph() }
 
     companion object {
-        fun newIntent(context: Context, mangaId: Long?, chapterId: Long?): Intent {
+        fun newIntent(
+            context: Context,
+            mangaId: Long?,
+            chapterId: Long?,
+            hopKey: String? = null,
+            hopPage: Int = -1,
+        ): Intent {
             return Intent(context, ReaderActivity::class.java).apply {
                 putExtra("manga", mangaId)
                 putExtra("chapter", chapterId)
+                if (hopKey != null) {
+                    putExtra("hop_key", hopKey)
+                    putExtra("hop_page", hopPage)
+                }
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
         }
@@ -328,8 +339,36 @@ class ReaderActivity : BaseActivity() {
                     onSave = viewModel::saveImage,
                 )
             }
+            is ReaderViewModel.Dialog.FindMigrate -> {
+                val hopState by viewModel.hopState.collectAsState()
+                FindMigrateDialog(
+                    state = hopState,
+                    onDismissRequest = onDismissRequest,
+                    onClickRow = ::hopTo,
+                    onClickMigrate = viewModel::requestHopMigrate,
+                    onConfirmMigrate = viewModel::migrateHopTo,
+                    onDismissMigrate = { viewModel.requestHopMigrate(null) },
+                )
+            }
             null -> {}
         }
+    }
+
+    /**
+     * Opens the same chapter, at the same page, in the source of [row].
+     */
+    private fun hopTo(row: ReaderViewModel.HopRow) {
+        val chapter = row.chapter ?: return
+        startActivity(
+            ReaderActivity.newIntent(
+                context = this,
+                mangaId = row.manga.id,
+                chapterId = chapter.id,
+                hopKey = viewModel.hopKey,
+                hopPage = viewModel.currentPageIndex(),
+            ),
+        )
+        finish()
     }
 
     /**
@@ -471,6 +510,7 @@ class ReaderActivity : BaseActivity() {
             onOpenInWebView = ::openChapterInWebView.takeIf { isHttpSource },
             onOpenInBrowser = ::openChapterInBrowser.takeIf { isHttpSource },
             onShare = ::shareChapter.takeIf { isHttpSource },
+            onFindMigrate = viewModel::openFindMigrateDialog,
 
             chapterNavigatorType = if (!verticalNavigator) {
                 if (state.viewer is R2LPagerViewer || (state.viewer as? WebGpuViewer)?.isReversed ?: false) {
