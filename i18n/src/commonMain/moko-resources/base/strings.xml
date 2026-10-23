@@ -231,6 +231,11 @@
 
       <!-- General section -->
     <string name="pref_category_theme">Theme</string>
+    <string name="pref_settings_row_style">Settings style</string>
+    <string name="settings_style_classic">Classic (flat)</string>
+    <string name="settings_style_chevron">Arrow on tappable rows</string>
+    <string name="settings_style_cards">Cards</string>
+    <string name="settings_style_cards_chevron">Cards + arrow</string>
     <string name="pref_app_theme">App theme</string>
     <string name="theme_system">System</string>
     <string name="theme_light">Light</string>

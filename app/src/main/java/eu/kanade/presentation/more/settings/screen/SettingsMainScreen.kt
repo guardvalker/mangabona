@@ -14,7 +14,13 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import tachiyomi.presentation.core.util.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import eu.kanade.domain.ui.model.SettingsRowStyle
+import eu.kanade.presentation.more.settings.LocalSettingsRowStyle
+import mihon.app.di.appGraph
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -99,6 +105,7 @@ object SettingsMainScreen : Screen() {
             },
             containerColor = containerColor,
             content = { contentPadding ->
+                val uiPrefs = LocalContext.current.appGraph.uiPreferences
                 val state = rememberLazyListState()
                 val indexSelected = if (twoPane) {
                     items.indexOfFirst { it.screen::class == navigator.items.first()::class }
@@ -115,6 +122,7 @@ object SettingsMainScreen : Screen() {
                     null
                 }
 
+                val rowStyle by uiPrefs.settingsRowStyle.collectAsState()
                 LazyColumn(
                     state = state,
                     contentPadding = contentPadding,
@@ -141,7 +149,10 @@ object SettingsMainScreen : Screen() {
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             }
                         }
-                        CompositionLocalProvider(LocalContentColor provides contentColor) {
+                        CompositionLocalProvider(
+                            LocalContentColor provides contentColor,
+                            LocalSettingsRowStyle provides if (twoPane) SettingsRowStyle.CLASSIC else rowStyle,
+                        ) {
                             TextPreferenceWidget(
                                 modifier = modifier,
                                 title = stringResource(item.titleRes),

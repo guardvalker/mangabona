@@ -12,6 +12,7 @@ import androidx.core.app.ActivityCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.SettingsRowStyle
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.domain.ui.model.TimeFormat
@@ -93,6 +94,12 @@ object SettingsAppearanceScreen : SearchableSettings {
                         (context as? Activity)?.let { ActivityCompat.recreate(it) }
                         true
                     },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = uiPreferences.settingsRowStyle,
+                    entries = SettingsRowStyle.entries
+                        .associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_settings_row_style),
                 ),
             ),
         )

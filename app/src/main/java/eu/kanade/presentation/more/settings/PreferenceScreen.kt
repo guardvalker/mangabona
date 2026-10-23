@@ -7,11 +7,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import tachiyomi.presentation.core.util.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
+import mihon.app.di.appGraph
 import eu.kanade.presentation.more.settings.widget.PreferenceGroupHeader
 import kotlinx.coroutines.delay
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
@@ -29,6 +35,9 @@ fun PreferenceScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val state = rememberLazyListState()
+    val appContext = LocalContext.current
+    val uiPreferences = remember { appContext.appGraph.uiPreferences }
+    val rowStyle by uiPreferences.settingsRowStyle.collectAsState()
     val highlightKey = SearchableSettings.highlightKey
     if (highlightKey != null) {
         LaunchedEffect(Unit) {
@@ -41,6 +50,7 @@ fun PreferenceScreen(
         }
     }
 
+    CompositionLocalProvider(LocalSettingsRowStyle provides rowStyle) {
     ScrollbarLazyColumn(
         modifier = modifier,
         state = state,
@@ -82,6 +92,7 @@ fun PreferenceScreen(
                 }
             }
         }
+    }
     }
 }
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,12 +26,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.more.settings.LocalPreferenceHighlighted
 import eu.kanade.presentation.more.settings.LocalPreferenceMinHeight
+import eu.kanade.presentation.more.settings.LocalSettingsRowStyle
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.KeyboardArrowRight
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -45,8 +50,18 @@ internal fun BasePreferenceWidget(
 ) {
     val highlighted = LocalPreferenceHighlighted.current
     val minHeight = LocalPreferenceMinHeight.current
+    val style = LocalSettingsRowStyle.current
+    val cardModifier = if (style.cards) {
+        Modifier
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+    } else {
+        Modifier
+    }
     Row(
         modifier = modifier
+            .then(cardModifier)
             .highlightBackground(highlighted)
             .sizeIn(minHeight = minHeight)
             .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
@@ -80,6 +95,13 @@ internal fun BasePreferenceWidget(
             Box(
                 modifier = Modifier.padding(end = PrefsHorizontalPadding),
                 content = { widget() },
+            )
+        } else if (style.chevron && onClick != null) {
+            Icon(
+                imageVector = MaterialSymbols.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 12.dp),
             )
         }
     }
