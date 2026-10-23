@@ -4,6 +4,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -140,6 +143,9 @@ internal fun LazyListScope.updatesUiItems(
     }
 }
 
+private const val UNREAD_BACKGROUND_ALPHA = .10f
+private const val READ_COVER_ALPHA = .5f
+
 @Composable
 private fun UpdatesUiItem(
     update: UpdatesWithRelations,
@@ -159,6 +165,13 @@ private fun UpdatesUiItem(
 
     Row(
         modifier = modifier
+            .then(
+                if (update.read) {
+                    Modifier
+                } else {
+                    Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = UNREAD_BACKGROUND_ALPHA))
+                },
+            )
             .selectedBackground(selected)
             .combinedClickable(
                 onClick = onClick,
@@ -174,7 +187,8 @@ private fun UpdatesUiItem(
         MangaCover.Square(
             modifier = Modifier
                 .padding(vertical = 6.dp)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .alpha(if (update.read) READ_COVER_ALPHA else 1f),
             data = update.coverData,
             onClick = onClickCover,
         )
@@ -188,6 +202,7 @@ private fun UpdatesUiItem(
                 text = update.mangaTitle,
                 maxLines = 1,
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (update.read) FontWeight.Normal else FontWeight.Bold,
                 color = LocalContentColor.current.copy(alpha = textAlpha),
                 overflow = TextOverflow.Ellipsis,
             )
@@ -199,7 +214,7 @@ private fun UpdatesUiItem(
                         imageVector = MaterialSymbols.RoundedFilled.Circle,
                         contentDescription = stringResource(MR.strings.unread),
                         modifier = Modifier
-                            .height(8.dp)
+                            .height(10.dp)
                             .padding(end = 4.dp),
                         tint = MaterialTheme.colorScheme.primary,
                     )
