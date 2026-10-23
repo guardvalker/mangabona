@@ -3,10 +3,8 @@ package eu.kanade.tachiyomi.extension.util
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
-import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import dev.zacsweers.metro.Inject
-import eu.kanade.domain.base.BasePreferences
 import eu.kanade.tachiyomi.extension.installer.Installer
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.InstallStep
@@ -41,13 +39,11 @@ import java.util.concurrent.ConcurrentHashMap
 class ExtensionInstaller(
     @AppCoroutineScope private val scope: CoroutineScope,
     private val context: Context,
-    basePreferences: BasePreferences,
     networkHelper: NetworkHelper,
 ) {
 
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val activeSteps = ConcurrentHashMap<Long, MutableStateFlow<InstallStep>>()
-    private val extensionInstaller = basePreferences.extensionInstaller
 
     private val httpClient: OkHttpClient by lazy { networkHelper.client }
 
@@ -128,35 +124,8 @@ class ExtensionInstaller(
         packageInfo: PackageInfo,
         isUpdateForPrivatelyInstalled: Boolean = false,
     ) {
-        if (isUpdateForPrivatelyInstalled) {
-            installApkPrivately(downloadId, tempFile, packageInfo)
-            return
-        }
-
-        when (val installer = extensionInstaller.get()) {
-            BasePreferences.ExtensionInstaller.LEGACY -> {
-                val intent = Intent(context, ExtensionInstallActivity::class.java)
-                    .setDataAndType(tempFile.getUriCompat(context), APK_MIME)
-                    .putExtra(EXTRA_DOWNLOAD_ID, downloadId)
-                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
-                context.startActivity(intent)
-            }
-
-            BasePreferences.ExtensionInstaller.PRIVATE -> {
-                installApkPrivately(downloadId, tempFile, packageInfo)
-            }
-
-            else -> {
-                val intent = ExtensionInstallService.getIntent(
-                    context,
-                    downloadId,
-                    tempFile.getUriCompat(context),
-                    installer,
-                )
-                ContextCompat.startForegroundService(context, intent)
-            }
-        }
+        // Always private: no system installer, so no confirmation prompt and no install permission
+        installApkPrivately(downloadId, tempFile, packageInfo)
     }
 
     private fun installApkPrivately(downloadId: Long, tempFile: File, packageInfo: PackageInfo) {

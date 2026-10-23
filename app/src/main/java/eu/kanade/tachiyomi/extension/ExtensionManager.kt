@@ -4,7 +4,6 @@ import android.content.Context
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.interactor.TrustExtension
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.data.library.LibraryUpdateWorker
@@ -65,7 +64,6 @@ class ExtensionManager(
     @AppCoroutineScope private val scope: CoroutineScope,
     private val context: Context,
     private val preferences: SourcePreferences,
-    private val basePreferences: BasePreferences,
     private val trustExtension: TrustExtension,
     private val extensionStoreRepository: ExtensionStoreRepository,
     private val updateExtensionStores: UpdateExtensionStores,
@@ -222,10 +220,7 @@ class ExtensionManager(
         initialized.await()
         setAvailableExtensions(extensions)
 
-        if (preferences.autoUpdateExtensions.get() &&
-            // The legacy installer needs the user to confirm each install
-            basePreferences.extensionInstaller.get() != BasePreferences.ExtensionInstaller.LEGACY
-        ) {
+        if (preferences.autoUpdateExtensions.get()) {
             updateAllInstalled()
         }
 

@@ -394,30 +394,6 @@ object SettingsAdvancedScreen : SearchableSettings {
                     title = stringResource(MR.strings.pref_auto_update_app),
                     subtitle = stringResource(MR.strings.pref_auto_update_app_summary),
                 ),
-                Preference.PreferenceItem.ListPreference(
-                    preference = extensionInstallerPref,
-                    entries = extensionInstallerPref.entries
-                        .filter {
-                            // TODO: allow private option in stable versions once URL handling is more fleshed out
-                            if (isReleaseBuildType) {
-                                it != BasePreferences.ExtensionInstaller.PRIVATE
-                            } else {
-                                true
-                            }
-                        }
-                        .associateWith { stringResource(it.titleRes) },
-                    title = stringResource(MR.strings.ext_installer_pref),
-                    onValueChanged = {
-                        if (it == BasePreferences.ExtensionInstaller.SHIZUKU &&
-                            !context.isShizukuInstalled
-                        ) {
-                            shizukuMissing = true
-                            false
-                        } else {
-                            true
-                        }
-                    },
-                ),
                 Preference.PreferenceItem.TextPreference(
                     title = stringResource(MR.strings.ext_revoke_trust),
                     onClick = { trustExtension.revokeAll() },
