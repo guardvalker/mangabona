@@ -28,6 +28,7 @@ import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.rounded.DoneAll
 import mihon.icons.materialsymbols.rounded.FilterList
+import mihon.icons.materialsymbols.rounded.Group
 import mihon.icons.materialsymbols.rounded.Keep
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.padding
@@ -47,6 +48,8 @@ fun GlobalSearchToolbar(
     onlyShowHasResults: Boolean,
     onToggleResults: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
+    unified: Boolean? = null,
+    onToggleUnified: () -> Unit = {},
 ) {
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
         Box {
@@ -126,6 +129,25 @@ fun GlobalSearchToolbar(
                     Text(text = stringResource(MR.strings.has_results))
                 },
             )
+
+            // Only the global search groups titles, the migration search doesn't
+            if (unified != null) {
+                FilterChip(
+                    selected = unified,
+                    onClick = onToggleUnified,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = MaterialSymbols.Rounded.Group,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(FilterChipDefaults.IconSize),
+                        )
+                    },
+                    label = {
+                        Text(text = stringResource(MR.strings.unified_results))
+                    },
+                )
+            }
         }
 
         HorizontalDivider()

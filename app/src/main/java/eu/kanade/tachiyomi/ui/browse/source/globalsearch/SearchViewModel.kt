@@ -5,11 +5,14 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.produceState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.Source
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.domain.manga.interactor.GetManga
@@ -27,6 +31,7 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.source.local.isLocal
+import kotlin.time.Duration.Companion.seconds
 
 abstract class SearchViewModel(
     initialState: State = State(),
@@ -49,6 +54,7 @@ abstract class SearchViewModel(
 
     private val coroutineDispatcher = Dispatchers.IO.limitedParallelism(5)
     private var searchJob: Job? = null
+    private var chapterCountsJob: Job? = null
 
     private val enabledLanguages = sourcePreferences.enabledLanguages.get()
     private val disabledSources = sourcePreferences.disabledSources.get()
@@ -71,6 +77,11 @@ abstract class SearchViewModel(
         viewModelScope.launch {
             preferences.globalSearchFilterState.changes().collectLatest { onlyShowHasResults ->
                 state.update { it.copy(onlyShowHasResults = onlyShowHasResults) }
+            }
+        }
+        viewModelScope.launch {
+            preferences.globalSearchUnified.changes().collectLatest { unified ->
+                state.update { it.copy(unified = unified) }
             }
         }
     }
@@ -122,6 +133,55 @@ abstract class SearchViewModel(
 
     fun toggleFilterResults() {
         preferences.globalSearchFilterState.toggle()
+    }
+
+    fun toggleUnified() {
+        preferences.globalSearchUnified.toggle()
+    }
+
+    /**
+     * Opens the chooser for a title found in several sources, counting the chapters each one has so the
+     * fullest one can be picked.
+     */
+    fun openUnifiedGroup(group: UnifiedGroup) {
+        chapterCountsJob?.cancel()
+        state.update {
+            it.copy(
+                unifiedDialog = group,
+                chapterCounts = group.entries.associate { entry -> entry.manga.id to ChapterCount.Loading },
+            )
+        }
+        chapterCountsJob = viewModelScope.launch(Dispatchers.IO) {
+            group.entries.map { entry ->
+                async {
+                    val count = try {
+                        withTimeout(CHAPTER_COUNT_TIMEOUT) {
+                            withContext(coroutineDispatcher) {
+                                entry.source.getMangaUpdate(
+                                    manga = entry.manga.toSManga(),
+                                    chapters = emptyList(),
+                                    fetchDetails = false,
+                                    fetchChapters = true,
+                                )
+                            }
+                        }.chapters.size.let { ChapterCount.Count(it) }
+                    } catch (e: TimeoutCancellationException) {
+                        ChapterCount.Failed
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        ChapterCount.Failed
+                    }
+                    state.update { it.copy(chapterCounts = it.chapterCounts + (entry.manga.id to count)) }
+                }
+            }
+                .awaitAll()
+        }
+    }
+
+    fun closeUnifiedGroup() {
+        chapterCountsJob?.cancel()
+        state.update { it.copy(unifiedDialog = null, chapterCounts = emptyMap()) }
     }
 
     fun search() {
@@ -222,16 +282,54 @@ abstract class SearchViewModel(
         val onlyShowHasResults: Boolean = false,
         val items: Map<Source, SearchItemResult> = mapOf(),
         val dialog: Dialog? = null,
+        val unified: Boolean = true,
+        val unifiedDialog: UnifiedGroup? = null,
+        val chapterCounts: Map<Long, ChapterCount> = emptyMap(),
     ) {
         val progress: Int = items.count { it.value !is SearchItemResult.Loading }
         val total: Int = items.size
         val filteredItems = items.filter { (_, result) -> result.isVisible(onlyShowHasResults) }
+        val unifiedGroups: List<UnifiedGroup> = buildUnifiedGroups(items)
     }
 
     sealed interface Dialog {
         data class Migrate(val target: Manga, val current: Manga) : Dialog
     }
 }
+
+/**
+ * The same title as found in each source.
+ */
+@Immutable
+data class UnifiedGroup(val key: String, val title: String, val entries: List<UnifiedEntry>)
+
+@Immutable
+data class UnifiedEntry(val source: Source, val manga: Manga)
+
+sealed interface ChapterCount {
+    data object Loading : ChapterCount
+    data class Count(val value: Int) : ChapterCount
+    data object Failed : ChapterCount
+}
+
+/**
+ * Titles that only differ in case or punctuation are taken as the same one. Groups found in more sources
+ * go first, and the rest keep the order the sources answered in.
+ */
+private fun buildUnifiedGroups(items: Map<Source, SearchItemResult>): List<UnifiedGroup> {
+    return items
+        .flatMap { (source, result) ->
+            (result as? SearchItemResult.Success)?.result.orEmpty().map { UnifiedEntry(source, it) }
+        }
+        .groupBy { entry ->
+            val title = entry.manga.title.lowercase()
+            title.filter { it.isLetterOrDigit() }.ifEmpty { title }
+        }
+        .map { (key, entries) -> UnifiedGroup(key, entries.first().manga.title, entries) }
+        .sortedByDescending { it.entries.size }
+}
+
+private val CHAPTER_COUNT_TIMEOUT = 12.seconds
 
 enum class SourceFilter {
     All,

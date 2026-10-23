@@ -35,6 +35,9 @@
     <string name="label_migration">Migrate</string>
     <string name="label_extensions">Extensions</string>
     <string name="label_explore">Explore</string>
+    <string name="unified_results">Unified</string>
+    <string name="unified_open_best">Open best</string>
+    <string name="unified_chapters">%1$d chapters</string>
     <string name="label_extension_info">Extension info</string>
     <string name="label_help">Help</string>
     <string name="label_support_us">Support Us</string>

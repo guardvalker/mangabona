@@ -11,6 +11,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.zacsweers.metrox.viewmodel.assistedMetroViewModel
 import eu.kanade.presentation.browse.GlobalSearchScreen
+import eu.kanade.presentation.browse.components.UnifiedSourceDialog
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
@@ -66,7 +67,28 @@ class GlobalSearchScreen(
                 },
                 onClickItem = { navigator.push(MangaScreen(it.id, true)) },
                 onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
+                onToggleUnified = viewModel::toggleUnified,
+                onClickGroup = { group ->
+                    val single = group.entries.singleOrNull()
+                    if (single != null) {
+                        navigator.push(MangaScreen(single.manga.id, true))
+                    } else {
+                        viewModel.openUnifiedGroup(group)
+                    }
+                },
             )
+
+            state.unifiedDialog?.let { group ->
+                UnifiedSourceDialog(
+                    group = group,
+                    chapterCounts = state.chapterCounts,
+                    onSelect = { entry ->
+                        viewModel.closeUnifiedGroup()
+                        navigator.push(MangaScreen(entry.manga.id, true))
+                    },
+                    onDismissRequest = viewModel::closeUnifiedGroup,
+                )
+            }
         }
     }
 }
