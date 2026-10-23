@@ -96,7 +96,8 @@ private fun LibraryRegularToolbar(
         },
         searchQuery = searchQuery,
         onChangeSearchQuery = onSearchQueryChange,
-        actions = {
+        // Same order as the updates toolbar: switch, filter, then search and the menu
+        actionsBeforeSearch = {
             val filterTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current
             AppBarActions(
                 listOf(
@@ -111,6 +112,12 @@ private fun LibraryRegularToolbar(
                         iconTint = filterTint,
                         onClick = onClickFilter,
                     ),
+                ),
+            )
+        },
+        actions = {
+            AppBarActions(
+                listOf(
                     AppBar.OverflowAction(
                         title = stringResource(MR.strings.action_update_library),
                         onClick = onClickGlobalUpdate,

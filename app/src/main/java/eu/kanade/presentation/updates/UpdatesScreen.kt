@@ -176,17 +176,17 @@ private fun UpdatesAppBar(
         actions = {
             AppBarActions(
                 listOf(
+                    // Same order as the library toolbar: switch, filter, then the rest
+                    AppBar.Action(
+                        title = stringResource(MR.strings.label_library),
+                        icon = MaterialSymbols.Rounded.CollectionsBookmark,
+                        onClick = onLibraryClicked,
+                    ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_filter),
                         icon = MaterialSymbols.Rounded.FilterList,
                         iconTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current,
                         onClick = onFilterClicked,
-                    ),
-                    // Third from the right, the same spot as the updates button in the library toolbar
-                    AppBar.Action(
-                        title = stringResource(MR.strings.label_library),
-                        icon = MaterialSymbols.Rounded.CollectionsBookmark,
-                        onClick = onLibraryClicked,
                     ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_view_upcoming),
