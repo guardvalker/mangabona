@@ -176,6 +176,27 @@ class LibraryUpdateNotifier(
     }
 
     /**
+     * Shows the sources where every title failed to update, which usually means the source is down.
+     */
+    fun showBrokenSourcesNotification(sourceNames: List<String>) {
+        if (sourceNames.isEmpty()) return
+
+        context.notify(
+            Notifications.ID_LIBRARY_BROKEN_SOURCES,
+            Notifications.CHANNEL_LIBRARY_ERROR,
+        ) {
+            setContentTitle(context.stringResource(MR.strings.notification_broken_sources))
+            if (!securityPreferences.hideNotificationContent.get()) {
+                val names = sourceNames.joinToString()
+                setContentText(names)
+                setStyle(NotificationCompat.BigTextStyle().bigText(names))
+            }
+            setSmallIcon(R.drawable.ic_mihon)
+            setAutoCancel(true)
+        }
+    }
+
+    /**
      * Shows the notification containing the result of the update done by the service.
      *
      * @param updates a list of manga with new updates.

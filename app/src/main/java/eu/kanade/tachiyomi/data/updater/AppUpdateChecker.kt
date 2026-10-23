@@ -36,13 +36,7 @@ class AppUpdateChecker(
     }
 }
 
-val GITHUB_REPO: String by lazy {
-    if (isNightlyBuildType) {
-        "guardvalker/mangabona"
-    } else {
-        "guardvalker/mangabona"
-    }
-}
+const val GITHUB_REPO = "guardvalker/mangabona"
 
 val RELEASE_TAG: String by lazy {
     if (isNightlyBuildType) {

@@ -85,11 +85,7 @@ data object LibraryTab : Tab {
     var showingUpdates by mutableStateOf(true)
 
     override suspend fun onReselect(navigator: Navigator) {
-        if (showingUpdates) {
-            UpdatesTab.onReselect(navigator)
-        } else {
-            requestOpenSettingsSheet()
-        }
+        if (!showingUpdates) requestOpenSettingsSheet()
     }
 
     @Composable
@@ -111,6 +107,9 @@ data object LibraryTab : Tab {
         val viewModel = metroViewModel<LibraryViewModel>()
         val settingsViewModel = metroViewModel<LibrarySettingsViewModel>()
         val state by viewModel.state.collectAsStateWithLifecycle()
+
+        // Back goes to the updates this tab opens on. Registered first so closing a selection or search wins.
+        BackHandler { showingUpdates = true }
 
         val snackbarHostState = remember { SnackbarHostState() }
 

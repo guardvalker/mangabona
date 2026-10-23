@@ -117,10 +117,8 @@ import mihon.app.di.appGraph
 import mihon.core.metro.metroGraph
 import mihon.core.migration.Migrator
 import mihon.domain.database.repository.DatabaseRepository
-import mihon.feature.support.SupportUsScreen
 import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.automirroredrounded.OpenInNew
-import mihon.icons.materialsymbols.roundedfilled.VolunteerActivism
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
@@ -433,133 +431,6 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    @Composable
-    private fun ShowDonationCampaign() {
-        val navigator = LocalNavigator.currentOrThrow
-
-        var showCampaign by remember { mutableStateOf(false) }
-        if (showCampaign) {
-            val uriHandler = LocalUriHandler.current
-            val dismissSupportMessage = {
-                preferences.donationCampaignShown.set(true)
-                showCampaign = false
-            }
-            AdaptiveSheet(
-                onDismissRequest = dismissSupportMessage,
-                enableImplicitDismiss = false,
-            ) {
-                Column {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Column(
-                        modifier = Modifier
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp)
-                            .weight(1f, fill = false)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            text = stringResource(MR.strings.donationCampaign_title),
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.headlineSmall,
-                        )
-                        Text(
-                            text = stringResource(MR.strings.donationCampaign_paragraph1),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = stringResource(MR.strings.donationCampaign_paragraph2),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = stringResource(MR.strings.donationCampaign_paragraph3),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-
-                    HorizontalDivider()
-
-                    Button(
-                        modifier = Modifier
-                            .padding(top = MaterialTheme.padding.small)
-                            .padding(horizontal = MaterialTheme.padding.medium)
-                            .fillMaxWidth(),
-                        onClick = {
-                            navigator.push(SupportUsScreen())
-                            dismissSupportMessage()
-                        },
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-                        ) {
-                            Icon(
-                                imageVector = MaterialSymbols.RoundedFilled.VolunteerActivism,
-                                contentDescription = null,
-                            )
-                            Text(
-                                text = stringResource(MR.strings.label_support_us),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        }
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-                        modifier = Modifier
-                            .padding(bottom = MaterialTheme.padding.small)
-                            .padding(horizontal = MaterialTheme.padding.medium),
-                    ) {
-                        OutlinedButton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            onClick = { uriHandler.openUri(Constants.URL_DISCORD) },
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-                            ) {
-                                Text(
-                                    text = stringResource(MR.strings.donationCampaign_contactPlatform),
-                                )
-                                Icon(
-                                    imageVector = MaterialSymbols.AutoMirroredRounded.OpenInNew,
-                                    contentDescription = null,
-                                )
-                            }
-                        }
-                        OutlinedButton(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            onClick = dismissSupportMessage,
-                        ) {
-                            Text(
-                                text = stringResource(MR.strings.donationCampaign_dismiss),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        LaunchedEffect(Unit) {
-            try {
-                val firstInstallTime = packageManager.getPackageInfo(packageName, 0).firstInstallTime
-                val eligibleTime = Instant.fromEpochMilliseconds(firstInstallTime).plus(6 * 30.days)
-                showCampaign = (Clock.System.now() >= eligibleTime && !preferences.donationCampaignShown.get())
-            } catch (_: PackageManager.NameNotFoundException) {
-            }
-        }
-    }
-
-    /**
-     * Sets custom splash screen exit animation on devices prior to Android 12.
-     *
-     * When custom animation is used, status and navigation bar color will be set to transparent and will be restored
-     * after the animation is finished.
-     */
-    @Suppress("Deprecation")
     private fun setSplashScreenExitAnimation(splashScreen: SplashScreen?) {
         val root = findViewById<View>(android.R.id.content)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && splashScreen != null) {

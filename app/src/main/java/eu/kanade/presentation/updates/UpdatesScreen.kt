@@ -30,8 +30,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import mihon.icons.materialsymbols.MaterialSymbols
-import mihon.icons.materialsymbols.rounded.CalendarMonth
 import mihon.icons.materialsymbols.rounded.CollectionsBookmark
+import mihon.icons.materialsymbols.rounded.Download
 import mihon.icons.materialsymbols.rounded.FilterList
 import mihon.icons.materialsymbols.rounded.FlipToBack
 import mihon.icons.materialsymbols.rounded.Refresh
@@ -54,7 +54,7 @@ fun UpdateScreen(
     onClickCover: (UpdatesItem) -> Unit,
     onSelectAll: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
-    onCalendarClicked: () -> Unit,
+    onDownloadsClicked: () -> Unit,
     onUpdateLibrary: suspend () -> Boolean,
     onDownloadChapter: (List<UpdatesItem>, ChapterDownloadAction) -> Unit,
     onMultiBookmarkClicked: (List<UpdatesItem>, bookmark: Boolean) -> Unit,
@@ -75,7 +75,7 @@ fun UpdateScreen(
     Scaffold(
         topBar = { scrollBehavior ->
             UpdatesAppBar(
-                onCalendarClicked = { onCalendarClicked() },
+                onDownloadsClicked = onDownloadsClicked,
                 onUpdateLibrary = { scope.launch { onUpdateLibrary() } },
                 onFilterClicked = { onFilterClicked() },
                 onLibraryClicked = onLibraryClicked,
@@ -157,7 +157,7 @@ fun UpdateScreen(
 
 @Composable
 private fun UpdatesAppBar(
-    onCalendarClicked: () -> Unit,
+    onDownloadsClicked: () -> Unit,
     onUpdateLibrary: () -> Unit,
     onFilterClicked: () -> Unit,
     onLibraryClicked: () -> Unit,
@@ -189,9 +189,9 @@ private fun UpdatesAppBar(
                         onClick = onFilterClicked,
                     ),
                     AppBar.Action(
-                        title = stringResource(MR.strings.action_view_upcoming),
-                        icon = MaterialSymbols.Rounded.CalendarMonth,
-                        onClick = onCalendarClicked,
+                        title = stringResource(MR.strings.label_download_queue),
+                        icon = MaterialSymbols.Rounded.Download,
+                        onClick = onDownloadsClicked,
                     ),
                     AppBar.Action(
                         title = stringResource(MR.strings.action_update_library),

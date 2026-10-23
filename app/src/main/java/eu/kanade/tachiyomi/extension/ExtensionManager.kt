@@ -7,6 +7,7 @@ import dev.zacsweers.metro.SingleIn
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.interactor.TrustExtension
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.data.library.LibraryUpdateWorker
 import eu.kanade.tachiyomi.extension.api.ExtensionUpdateNotifier
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.InstallStep
@@ -14,9 +15,11 @@ import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.util.system.toast
+import eu.kanade.tachiyomi.util.system.workManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -46,6 +50,7 @@ import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
 import java.util.Locale
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The manager of extensions installed as another apk which extend the available sources. It handles
@@ -240,10 +245,19 @@ class ExtensionManager(
      * skipped and stays pending, so it ends up in the notification instead.
      */
     private suspend fun updateAllInstalled() {
+        val updatedSourceIds = mutableListOf<Long>()
         for (extension in installedWithUpdate()) {
-            withTimeoutOrNull(UPDATE_TIMEOUT) {
-                updateExtension(extension).takeWhile { !it.isCompleted() }.collect {}
+            val sourceIds = (extension as? Extension.Loaded)?.sources.orEmpty().map { it.id }
+            val lastStep = withTimeoutOrNull(UPDATE_TIMEOUT) {
+                updateExtension(extension).transformWhile { emit(it); !it.isCompleted() }.lastOrNull()
             }
+            if (lastStep == InstallStep.Installed) updatedSourceIds += sourceIds
+        }
+
+        if (updatedSourceIds.isNotEmpty()) {
+            // The new versions register themselves right after installing, so give them a moment
+            delay(EXTENSIONS_LOAD_DELAY)
+            LibraryUpdateWorker.startNow(context.workManager, sourceIds = updatedSourceIds)
         }
     }
 
@@ -468,3 +482,4 @@ class ExtensionManager(
 }
 
 private val UPDATE_TIMEOUT = 2.minutes
+private val EXTENSIONS_LOAD_DELAY = 3.seconds

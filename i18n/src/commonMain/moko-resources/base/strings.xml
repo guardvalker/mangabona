@@ -384,6 +384,9 @@
     <string name="ext_permission_install_apps_warning">Permissions are needed to install extensions. Tap here to grant.</string>
     <string name="ext_install_service_notif">Installing extension…</string>
     <string name="ext_installer_pref">Installer</string>
+    <string name="changelog">Changelog</string>
+    <string name="changelog_unavailable">Couldn\'t load the changelog. Check your connection</string>
+    <string name="notification_broken_sources">Some sources aren\'t responding</string>
     <string name="pref_auto_update_app">Update the app automatically</string>
     <string name="pref_auto_update_app_summary">Downloads and installs new versions of the app when it opens. Android may still ask to confirm the first time</string>
     <string name="app_auto_updating">Updating to %1$s…</string>

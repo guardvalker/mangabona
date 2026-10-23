@@ -28,7 +28,6 @@ import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.ui.updates.UpdatesViewModel.Event
 import kotlinx.coroutines.flow.collectLatest
-import mihon.feature.upcoming.UpcomingScreen
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -48,7 +47,7 @@ data object UpdatesTab : Tab {
         }
 
     override suspend fun onReselect(navigator: Navigator) {
-        navigator.push(DownloadQueueScreen)
+        // Downloads have their own button in the toolbar
     }
 
     @Composable
@@ -76,7 +75,7 @@ data object UpdatesTab : Tab {
                 val intent = ReaderActivity.newIntent(context, it.update.mangaId, it.update.chapterId)
                 context.startActivity(intent)
             },
-            onCalendarClicked = { navigator.push(UpcomingScreen()) },
+            onDownloadsClicked = { navigator.push(DownloadQueueScreen) },
             onFilterClicked = viewModel::showFilterDialog,
             onLibraryClicked = { LibraryTab.showingUpdates = false },
             hasActiveFilters = state.hasActiveFilters,

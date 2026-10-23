@@ -128,7 +128,8 @@ class LibraryUpdateWorker(private val context: Context, workerParams: WorkerPara
         libraryPreferences.lastUpdatedTimestamp.set(Clock.System.now().toEpochMilliseconds())
 
         val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
-        addMangaToQueue(categoryId)
+        val sourceIds = inputData.getLongArray(KEY_SOURCES)?.toSet().orEmpty()
+        addMangaToQueue(categoryId, sourceIds)
 
         return withContext(Dispatchers.IO) {
             try {
@@ -164,9 +165,11 @@ class LibraryUpdateWorker(private val context: Context, workerParams: WorkerPara
      * Adds list of manga to be updated.
      *
      * @param categoryId the ID of the category to update, or -1 if no category specified.
+     * @param sourceIds only update the manga of these sources, or all of them when empty.
      */
-    private suspend fun addMangaToQueue(categoryId: Long) {
+    private suspend fun addMangaToQueue(categoryId: Long, sourceIds: Set<Long>) {
         val libraryManga = getLibraryManga.await()
+            .filter { sourceIds.isEmpty() || it.manga.source in sourceIds }
 
         val listToUpdate = if (categoryId != -1L) {
             libraryManga.filter { categoryId in it.categories }
@@ -328,6 +331,16 @@ class LibraryUpdateWorker(private val context: Context, workerParams: WorkerPara
             }
         }
 
+        // A source where every title failed is most likely down or broken, not just a bad title
+        val brokenSources = failedUpdates.groupBy { it.first.source }
+            .filter { (sourceId, failed) ->
+                failed.size >= BROKEN_SOURCE_MIN_FAILURES && failed.size == mangaToUpdate.count { it.manga.source == sourceId }
+            }
+            .keys
+        if (brokenSources.isNotEmpty()) {
+            notifier.showBrokenSourcesNotification(brokenSources.map { sourceManager.getOrStub(it).name })
+        }
+
         if (failedUpdates.isNotEmpty()) {
             val errorFile = writeErrorFile(failedUpdates)
             notifier.showUpdateErrorNotification(
@@ -436,6 +449,13 @@ class LibraryUpdateWorker(private val context: Context, workerParams: WorkerPara
          */
         private const val KEY_CATEGORY = "category"
 
+        /**
+         * Key for the sources to update, when only some should.
+         */
+        private const val KEY_SOURCES = "sources"
+
+        private const val BROKEN_SOURCE_MIN_FAILURES = 2
+
         fun setupTask(
             context: Context,
             prefInterval: Int? = null,
@@ -491,6 +511,7 @@ class LibraryUpdateWorker(private val context: Context, workerParams: WorkerPara
         suspend fun startNow(
             workManager: WorkManager,
             category: Category? = null,
+            sourceIds: Collection<Long> = emptyList(),
         ): Boolean {
             if (workManager.isRunning(TAG)) {
                 // Already running either as a scheduled or manual job
@@ -499,6 +520,7 @@ class LibraryUpdateWorker(private val context: Context, workerParams: WorkerPara
 
             val inputData = workDataOf(
                 KEY_CATEGORY to category?.id,
+                KEY_SOURCES to sourceIds.toLongArray(),
             )
             val request = OneTimeWorkRequestBuilder<LibraryUpdateWorker>()
                 .addTag(TAG)

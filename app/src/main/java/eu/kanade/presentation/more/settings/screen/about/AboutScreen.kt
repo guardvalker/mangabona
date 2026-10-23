@@ -4,15 +4,23 @@ import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -30,14 +38,15 @@ import eu.kanade.presentation.util.LocalBackPress
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.rememberIs24HourSystem
 import eu.kanade.tachiyomi.BuildConfig
+import eu.kanade.tachiyomi.data.updater.ChangelogEntry
 import eu.kanade.tachiyomi.data.updater.RELEASE_URL
 import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.util.lang.toDateTimestampString
-import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.isFossBuildType
 import eu.kanade.tachiyomi.util.system.isNightlyBuildType
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,12 +54,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import logcat.LogPriority
 import mihon.app.di.appGraph
-import mihon.icons.simpleicons.Discord
-import mihon.icons.simpleicons.Facebook
 import mihon.icons.simpleicons.Github
-import mihon.icons.simpleicons.Reddit
 import mihon.icons.simpleicons.SimpleIcons
-import mihon.icons.simpleicons.X
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
@@ -73,7 +78,7 @@ object AboutScreen : Screen() {
         val handleBack = LocalBackPress.current
         val navigator = LocalNavigator.currentOrThrow
         var isCheckingUpdates by remember { mutableStateOf(false) }
-        val crashLogUtil = remember { context.appGraph.crashLogUtil }
+        var showChangelog by remember { mutableStateOf(false) }
         val is24HourSystem = rememberIs24HourSystem()
 
         Scaffold(
@@ -100,10 +105,7 @@ object AboutScreen : Screen() {
                         // Keyed on the system 12/24h setting, which can change while the app is backgrounded.
                         // Date/time prefs only change in Appearance, which recreates this screen on return.
                         subtitle = remember(is24HourSystem) { getVersionName(withBuildDate = true) },
-                        onPreferenceClick = {
-                            val deviceInfo = crashLogUtil.getDebugInfo()
-                            context.copyToClipboard("Debug information", deviceInfo)
-                        },
+                        onPreferenceClick = { showChangelog = true },
                     )
                 }
 
@@ -178,6 +180,58 @@ object AboutScreen : Screen() {
                 }
             }
         }
+
+        if (showChangelog) {
+            ChangelogDialog(onDismissRequest = { showChangelog = false })
+        }
+    }
+
+    @Composable
+    private fun ChangelogDialog(onDismissRequest: () -> Unit) {
+        val context = LocalContext.current
+        val entries by produceState<List<ChangelogEntry>?>(initialValue = null) {
+            value = try {
+                context.appGraph.changelogFetcher.await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e)
+                emptyList()
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = onDismissRequest,
+            title = { Text(text = stringResource(MR.strings.changelog)) },
+            text = {
+                when (val list = entries) {
+                    null -> CircularProgressIndicator()
+                    else -> if (list.isEmpty()) {
+                        Text(text = stringResource(MR.strings.changelog_unavailable))
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            items(list) { entry ->
+                                Column {
+                                    Text(
+                                        text = entry.version,
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                    Text(
+                                        text = entry.notes.ifEmpty { "-" },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissRequest) {
+                    Text(text = stringResource(MR.strings.action_ok))
+                }
+            },
+        )
     }
 
     /**
