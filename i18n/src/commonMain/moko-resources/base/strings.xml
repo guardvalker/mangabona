@@ -34,6 +34,7 @@
     <string name="label_stats">Statistics</string>
     <string name="label_migration">Migrate</string>
     <string name="label_extensions">Extensions</string>
+    <string name="label_explore">Explore</string>
     <string name="label_extension_info">Extension info</string>
     <string name="label_help">Help</string>
     <string name="label_support_us">Support Us</string>

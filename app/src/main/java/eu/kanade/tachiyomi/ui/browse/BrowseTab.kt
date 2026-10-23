@@ -17,6 +17,7 @@ import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.util.rememberAnimatedVectorPainter
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.extension.ExtensionsViewModel
+import eu.kanade.tachiyomi.ui.browse.explore.exploreTab
 import eu.kanade.tachiyomi.ui.browse.extension.extensionsTab
 import eu.kanade.tachiyomi.ui.browse.migration.sources.migrateSourceTab
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
@@ -63,6 +64,7 @@ data object BrowseTab : Tab {
 
         val tabs = listOf(
             extensionsTab(extensionsViewModel),
+            exploreTab(),
             migrateSourceTab(),
         )
 
