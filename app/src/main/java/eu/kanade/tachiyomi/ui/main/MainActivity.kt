@@ -96,6 +96,7 @@ import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isBenchmarkBuildType
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
 import eu.kanade.tachiyomi.util.view.setComposeContent
 import kotlinx.coroutines.CancellationException
@@ -121,6 +122,7 @@ import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.automirroredrounded.OpenInNew
 import mihon.icons.materialsymbols.roundedfilled.VolunteerActivism
 import tachiyomi.core.common.Constants
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
@@ -383,6 +385,13 @@ class MainActivity : BaseActivity() {
                     try {
                         val result = context.appGraph.updateChecker.checkForUpdate()
                         if (
+                            result is GetApplicationRelease.Result.NewUpdate &&
+                            result.release.version != preferences.skippedAppUpdate.get() &&
+                            preferences.autoUpdateApp.get()
+                        ) {
+                            context.toast(context.stringResource(MR.strings.app_auto_updating, result.release.version))
+                            context.appGraph.appUpdateInstaller.downloadAndInstall(result.release.downloadLink)
+                        } else if (
                             result is GetApplicationRelease.Result.NewUpdate &&
                             result.release.version != preferences.skippedAppUpdate.get() &&
                             navigator.items.none { it is NewUpdateScreen }

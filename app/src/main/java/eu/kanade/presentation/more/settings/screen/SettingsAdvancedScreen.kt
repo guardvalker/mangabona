@@ -389,6 +389,11 @@ object SettingsAdvancedScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.label_extensions),
             preferenceItems = listOf(
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = basePreferences.autoUpdateApp,
+                    title = stringResource(MR.strings.pref_auto_update_app),
+                    subtitle = stringResource(MR.strings.pref_auto_update_app_summary),
+                ),
                 Preference.PreferenceItem.ListPreference(
                     preference = extensionInstallerPref,
                     entries = extensionInstallerPref.entries

@@ -28,6 +28,7 @@ import eu.kanade.tachiyomi.data.library.MetadataUpdateWorker
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
+import eu.kanade.tachiyomi.data.updater.AppUpdateInstaller
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallActivity
 import eu.kanade.tachiyomi.network.JavaScriptEngine
@@ -99,6 +100,7 @@ interface AppGraph : ViewModelGraph {
     val downloadManager: DownloadManager
 
     val updateChecker: AppUpdateChecker
+    val appUpdateInstaller: AppUpdateInstaller
 
     val trustExtension: TrustExtension
     val extensionStoreRepository: ExtensionStoreRepository
