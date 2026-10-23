@@ -3,16 +3,21 @@ package eu.kanade.tachiyomi.ui.browse.explore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import dev.zacsweers.metrox.viewmodel.metroViewModel
+import eu.kanade.presentation.browse.ExploreFilterDialog
 import eu.kanade.presentation.browse.ExploreScreen
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.FilterList
 import mihon.icons.materialsymbols.rounded.Refresh
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -23,9 +28,16 @@ fun Screen.exploreTab(): TabContent {
     val viewModel = metroViewModel<ExploreViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    var showFilter by remember { mutableStateOf(false) }
+
     return TabContent(
         titleRes = MR.strings.label_explore,
         actions = listOf(
+            AppBar.Action(
+                title = stringResource(MR.strings.action_filter),
+                icon = MaterialSymbols.Rounded.FilterList,
+                onClick = { showFilter = true },
+            ),
             AppBar.Action(
                 title = stringResource(MR.strings.action_webview_refresh),
                 icon = MaterialSymbols.Rounded.Refresh,
@@ -41,6 +53,17 @@ fun Screen.exploreTab(): TabContent {
                 getManga = { viewModel.getManga(it) },
                 onClickItem = { navigator.push(MangaScreen(it.id, true)) },
             )
+
+            if (showFilter) {
+                ExploreFilterDialog(
+                    options = state.filterOptions,
+                    onToggle = viewModel::toggleExtension,
+                    onDismissRequest = {
+                        showFilter = false
+                        viewModel.applyFilter()
+                    },
+                )
+            }
         },
     )
 }

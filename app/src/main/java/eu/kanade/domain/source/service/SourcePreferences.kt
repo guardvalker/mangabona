@@ -86,6 +86,18 @@ class SourcePreferences(
         true,
     )
 
+    // Explore hides the extensions marked 18+ unless they are in the shown set, and shows the rest unless they
+    // are in the hidden one
+    val exploreShownExtensions: Preference<Set<String>> = preferenceStore.getStringSet(
+        "explore_shown_extensions",
+        emptySet(),
+    )
+
+    val exploreHiddenExtensions: Preference<Set<String>> = preferenceStore.getStringSet(
+        "explore_hidden_extensions",
+        emptySet(),
+    )
+
     val migrationSources: Preference<List<Long>> = preferenceStore.getLongArray("migration_sources", emptyList())
 
     val migrationFlags: Preference<Set<MigrationFlag>> = preferenceStore.getObjectFromInt(

@@ -11,6 +11,7 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.Source
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -21,18 +22,20 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import logcat.LogPriority
+import mihon.domain.extension.model.ContentWarning
 import mihon.domain.manga.model.toDomainManga
+import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.source.local.isLocal
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
@@ -44,7 +47,7 @@ import kotlin.time.Duration.Companion.seconds
 @ViewModelKey
 @ContributesIntoMap(AppScope::class, binding = binding<ViewModel>())
 class ExploreViewModel(
-    private val sourceManager: SourceManager,
+    private val extensionManager: ExtensionManager,
     private val sourcePreferences: SourcePreferences,
     private val networkToLocalManga: NetworkToLocalManga,
     private val getManga: GetManga,
@@ -57,32 +60,99 @@ class ExploreViewModel(
     private var job: Job? = null
     private var started = false
 
+    // What each source answered, kept so changing the filter doesn't ask everyone again
+    private val cache = ConcurrentHashMap<Long, List<Manga>>()
+
+    init {
+        viewModelScope.launch {
+            combine(
+                extensionManager.loadedExtensionsFlow,
+                sourcePreferences.exploreShownExtensions.changes(),
+                sourcePreferences.exploreHiddenExtensions.changes(),
+            ) { extensions, shown, hidden ->
+                extensions
+                    .filter { extension -> extension.sources.any { it.supportsLatest } }
+                    .sortedBy { it.name.lowercase() }
+                    .map {
+                        val isNsfw = it.contentWarning == ContentWarning.NSFW
+                        ExploreFilterOption(
+                            pkgName = it.pkgName,
+                            name = it.name,
+                            isNsfw = isNsfw,
+                            isShown = isVisible(it.pkgName, isNsfw, shown, hidden),
+                        )
+                    }
+            }
+                .collectLatest { options -> state.update { it.copy(filterOptions = options) } }
+        }
+    }
+
     /**
      * Loads once when the section is first shown, so opening Browse alone doesn't hit every source.
      */
     fun loadIfNeeded() {
-        if (!started) refresh()
+        if (!started) load()
     }
 
     fun refresh() {
+        cache.clear()
+        load()
+    }
+
+    /**
+     * Called when the filter closes, to show or hide what changed.
+     */
+    fun applyFilter() {
+        if (started) load()
+    }
+
+    fun toggleExtension(option: ExploreFilterOption) {
+        val shown = sourcePreferences.exploreShownExtensions
+        val hidden = sourcePreferences.exploreHiddenExtensions
+        if (!option.isShown) {
+            hidden.getAndSet { it - option.pkgName }
+            if (option.isNsfw) shown.getAndSet { it + option.pkgName }
+        } else {
+            shown.getAndSet { it - option.pkgName }
+            hidden.getAndSet { it + option.pkgName }
+        }
+    }
+
+    private fun isVisible(pkgName: String, isNsfw: Boolean, shown: Set<String>, hidden: Set<String>): Boolean {
+        return pkgName !in hidden && (pkgName in shown || !isNsfw)
+    }
+
+    private fun load() {
         started = true
         job?.cancel()
         job = viewModelScope.launch(Dispatchers.IO) {
             val enabledLanguages = sourcePreferences.enabledLanguages.get()
             val disabledSources = sourcePreferences.disabledSources.get()
             val pinnedSources = sourcePreferences.pinnedSources.get()
+            val shown = sourcePreferences.exploreShownExtensions.get()
+            val hidden = sourcePreferences.exploreHiddenExtensions.get()
 
-            val sources = sourceManager.getAll()
+            val sources = extensionManager.getLoadedExtensions()
+                .filter { isVisible(it.pkgName, it.contentWarning == ContentWarning.NSFW, shown, hidden) }
+                .flatMap { it.sources }
+                .distinctBy { it.id }
                 .filter {
                     it.supportsLatest && !it.isLocal() &&
                         it.lang in enabledLanguages && "${it.id}" !in disabledSources
                 }
                 .sortedWith(compareBy({ "${it.id}" !in pinnedSources }, { it.name.lowercase() }))
 
-            state.value = State(isLoading = true, total = sources.size)
+            val pending = sources.filter { !cache.containsKey(it.id) }
+            state.update {
+                State(
+                    isLoading = pending.isNotEmpty(),
+                    total = pending.size,
+                    items = if (pending.isEmpty()) interleave(sources) else emptyList(),
+                    filterOptions = it.filterOptions,
+                )
+            }
 
-            val results = ConcurrentHashMap<Long, List<Manga>>()
-            sources.map { source ->
+            pending.map { source ->
                 async {
                     try {
                         val titles = withTimeout(SOURCE_TIMEOUT) {
@@ -92,7 +162,7 @@ class ExploreViewModel(
                             .map { it.toDomainManga(source.id) }
                             .distinctBy { it.url }
                             .let { networkToLocalManga(it) }
-                        results[source.id] = titles
+                        cache[source.id] = titles
                     } catch (e: TimeoutCancellationException) {
                         // Only this source gave up, the rest keep going
                         state.update { it.copy(failed = it.failed + 1) }
@@ -109,15 +179,15 @@ class ExploreViewModel(
                 .awaitAll()
 
             // Shown only once everything answered (or timed out) so the covers don't jump around while loading
-            state.update { it.copy(isLoading = false, items = interleave(sources, results)) }
+            state.update { it.copy(isLoading = false, items = interleave(sources)) }
         }
     }
 
     /**
      * One title from each source in turn, so a single source with a long list doesn't take the whole feed.
      */
-    private fun interleave(sources: List<Source>, results: Map<Long, List<Manga>>): List<ExploreEntry> {
-        val lists = sources.mapNotNull { source -> results[source.id]?.takeIf { it.isNotEmpty() }?.let { source to it } }
+    private fun interleave(sources: List<Source>): List<ExploreEntry> {
+        val lists = sources.mapNotNull { source -> cache[source.id]?.takeIf { it.isNotEmpty() }?.let { source to it } }
         val longest = lists.maxOfOrNull { it.second.size } ?: 0
         return buildList {
             for (index in 0 until longest) {
@@ -146,10 +216,19 @@ class ExploreViewModel(
         val total: Int = 0,
         val failed: Int = 0,
         val items: List<ExploreEntry> = emptyList(),
+        val filterOptions: List<ExploreFilterOption> = emptyList(),
     )
 }
 
 @Immutable
 data class ExploreEntry(val source: Source, val manga: Manga)
+
+@Immutable
+data class ExploreFilterOption(
+    val pkgName: String,
+    val name: String,
+    val isNsfw: Boolean,
+    val isShown: Boolean,
+)
 
 private val SOURCE_TIMEOUT = 15.seconds

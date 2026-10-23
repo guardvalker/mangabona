@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -33,7 +32,6 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Badge
-import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.util.plus
@@ -57,10 +55,10 @@ fun UnifiedSearchContent(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(110.dp),
-        contentPadding = contentPadding + PaddingValues(MaterialTheme.padding.small),
-        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        columns = rememberLibraryGridCells(),
+        contentPadding = contentPadding + PaddingValues(8.dp),
+        verticalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridVerticalSpacer),
+        horizontalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridHorizontalSpacer),
     ) {
         items(items = groups, key = { it.key }) { group ->
             val manga by getManga(group.entries.first().manga)
