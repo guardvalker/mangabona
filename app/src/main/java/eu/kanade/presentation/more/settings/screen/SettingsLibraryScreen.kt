@@ -147,6 +147,10 @@ object SettingsLibraryScreen : SearchableSettings {
                     preference = autoUpdateIntervalPref,
                     entries = mapOf(
                         0 to stringResource(MR.strings.update_never),
+                        1 to stringResource(MR.strings.update_1hour),
+                        2 to stringResource(MR.strings.update_2hour),
+                        3 to stringResource(MR.strings.update_3hour),
+                        6 to stringResource(MR.strings.update_6hour),
                         12 to stringResource(MR.strings.update_12hour),
                         24 to stringResource(MR.strings.update_24hour),
                         48 to stringResource(MR.strings.update_48hour),
