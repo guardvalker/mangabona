@@ -13,6 +13,7 @@ import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.model.SManga
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,6 +34,7 @@ import mihon.domain.extension.model.ContentWarning
 import mihon.domain.manga.model.toDomainManga
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
@@ -51,6 +53,7 @@ class ExploreViewModel(
     private val sourcePreferences: SourcePreferences,
     private val networkToLocalManga: NetworkToLocalManga,
     private val getManga: GetManga,
+    private val getLibraryManga: GetLibraryManga,
 ) : ViewModel() {
 
     val state: StateFlow<State>
@@ -59,6 +62,7 @@ class ExploreViewModel(
     private val dispatcher = Dispatchers.IO.limitedParallelism(5)
     private var job: Job? = null
     private var started = false
+    private val suggested = mutableSetOf<String>()
 
     // What each source answered, kept so changing the filter doesn't ask everyone again
     private val cache = ConcurrentHashMap<Long, List<Manga>>()
@@ -104,6 +108,77 @@ class ExploreViewModel(
      */
     fun applyFilter() {
         if (started) load()
+    }
+
+    /**
+     * Picks a title from the feed that resembles what the library is full of. Titles already suggested
+     * are skipped, so pressing again keeps rotating. Null when there is nothing left to suggest.
+     */
+    suspend fun pickRandom(): Manga? = withContext(Dispatchers.IO) {
+        state.update { it.copy(isPicking = true) }
+        try {
+            val profile = getLibraryManga.await()
+                .flatMap { it.manga.genre.orEmpty() }
+                .map { it.trim().lowercase() }
+                .filter { it.isNotEmpty() }
+                .groupingBy { it }
+                .eachCount()
+
+            val pool = state.value.items
+                .filter { !it.manga.favorite && "${it.source.id}-${it.manga.url}" !in suggested }
+                .shuffled()
+
+            var best: ExploreEntry? = null
+            var bestScore = 0
+            if (profile.isNotEmpty()) {
+                // A few at a time, since a listing rarely carries genres and each needs its own request
+                for (batch in pool.chunked(PICK_BATCH).take(PICK_BATCHES)) {
+                    val scored = batch.map { entry ->
+                        async { entry to score(entry, profile) }
+                    }.awaitAll()
+                    // Weighted by how much of the library they match, so lesser genres still show up now and then
+                    val matches = scored.filter { it.second > 0 }
+                    if (matches.isNotEmpty()) {
+                        var roll = (0 until matches.sumOf { it.second }).random()
+                        val chosen = matches.first { (_, points) ->
+                            roll -= points
+                            roll < 0
+                        }
+                        best = chosen.first
+                        bestScore = chosen.second
+                        break
+                    }
+                }
+            }
+
+            val entry = best ?: pool.firstOrNull() ?: return@withContext null
+            suggested += "${entry.source.id}-${entry.manga.url}"
+            logcat(LogPriority.DEBUG) { "Explore pick: ${entry.manga.title} (score $bestScore)" }
+            entry.manga
+        } finally {
+            state.update { it.copy(isPicking = false) }
+        }
+    }
+
+    private suspend fun score(entry: ExploreEntry, profile: Map<String, Int>): Int {
+        val genres = entry.manga.genre?.takeIf { it.isNotEmpty() } ?: try {
+            withTimeout(PICK_TIMEOUT) {
+                entry.source.getMangaUpdate(
+                    manga = SManga.create().also {
+                        it.url = entry.manga.url
+                        it.title = entry.manga.title
+                    },
+                    chapters = emptyList(),
+                    fetchDetails = true,
+                    fetchChapters = false,
+                ).manga.getGenres()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        return genres.orEmpty().sumOf { profile[it.trim().lowercase()] ?: 0 }
     }
 
     fun toggleExtension(option: ExploreFilterOption) {
@@ -217,6 +292,7 @@ class ExploreViewModel(
         val failed: Int = 0,
         val items: List<ExploreEntry> = emptyList(),
         val filterOptions: List<ExploreFilterOption> = emptyList(),
+        val isPicking: Boolean = false,
     )
 }
 
@@ -232,3 +308,6 @@ data class ExploreFilterOption(
 )
 
 private val SOURCE_TIMEOUT = 15.seconds
+private val PICK_TIMEOUT = 8.seconds
+private const val PICK_BATCH = 6
+private const val PICK_BATCHES = 3
