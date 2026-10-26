@@ -67,6 +67,7 @@ class GlobalSearchScreen(
                 onClickItem = { navigator.push(MangaScreen(it.id, true)) },
                 onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
                 onApplyFilters = viewModel::applyFilters,
+                onLoadMore = viewModel::loadMore,
                 onClickGroup = { group ->
                     val single = group.entries.singleOrNull()
                     if (single != null) {

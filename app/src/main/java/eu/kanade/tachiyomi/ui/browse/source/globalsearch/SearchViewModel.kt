@@ -31,6 +31,7 @@ import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.source.local.isLocal
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 abstract class SearchViewModel(
@@ -58,6 +59,11 @@ abstract class SearchViewModel(
     private var chapterCountsJob: Job? = null
     private var detailsJob: Job? = null
     private val detailsTried = mutableSetOf<Long>()
+    private var loadMoreJob: Job? = null
+
+    // Last page asked of each source, and whether it said there is another one
+    private val sourcePages = ConcurrentHashMap<Long, Int>()
+    private val sourceHasNext = ConcurrentHashMap<Long, Boolean>()
 
     private val enabledLanguages = sourcePreferences.enabledLanguages.get()
     private val disabledSources = sourcePreferences.disabledSources.get()
@@ -292,7 +298,12 @@ abstract class SearchViewModel(
 
         searchJob?.cancel()
         detailsJob?.cancel()
-        state.update { it.copy(detailsProgress = null) }
+        loadMoreJob?.cancel()
+        if (!sameQuery) {
+            sourcePages.clear()
+            sourceHasNext.clear()
+        }
+        state.update { it.copy(detailsProgress = null, loadingMore = false) }
 
         searchJob = viewModelScope.launch(Dispatchers.IO) {
             val sources = getSelectedSources()
@@ -332,6 +343,8 @@ abstract class SearchViewModel(
                             .let { networkToLocalManga(it) }
 
                         if (isActive) {
+                            sourcePages[source.id] = 1
+                            sourceHasNext[source.id] = page.hasNextPage
                             updateItem(source, SearchItemResult.Success(titles))
                         }
                     } catch (e: Exception) {
@@ -343,7 +356,58 @@ abstract class SearchViewModel(
             }
                 .awaitAll()
 
+            state.update { it.copy(canLoadMore = sourceHasNext.values.any { next -> next }) }
             state.value.filters.let { if (it.statuses.isNotEmpty() || it.tags.isNotEmpty()) loadFilterDetails() }
+        }
+    }
+
+    /**
+     * Asks every source that has more for its next page and adds the titles to the ones already found.
+     */
+    fun loadMore() {
+        if (state.value.loadingMore) return
+        val query = state.value.searchQuery.orEmpty()
+        val sources = state.value.items.keys.filter { sourceHasNext[it.id] == true }
+        if (sources.isEmpty()) return
+
+        loadMoreJob = viewModelScope.launch(Dispatchers.IO) {
+            state.update { it.copy(loadingMore = true) }
+            sources.map { source ->
+                async {
+                    val pageNumber = (sourcePages[source.id] ?: 1) + 1
+                    try {
+                        val page = withTimeout(LOAD_MORE_TIMEOUT) {
+                            withContext(coroutineDispatcher) {
+                                if (query.isBlank()) {
+                                    source.getPopularManga(pageNumber)
+                                } else {
+                                    source.getSearchManga(pageNumber, query, source.getFilterList())
+                                }
+                            }
+                        }
+                        val known = (state.value.items[source] as? SearchItemResult.Success)?.result.orEmpty()
+                        val knownUrls = known.map { it.url }.toSet()
+                        val titles = page.mangas
+                            .map { it.toDomainManga(source.id) }
+                            .distinctBy { it.url }
+                            .filter { it.url !in knownUrls }
+                            .let { networkToLocalManga(it) }
+                        sourcePages[source.id] = pageNumber
+                        sourceHasNext[source.id] = page.hasNextPage && titles.isNotEmpty()
+                        updateItem(source, SearchItemResult.Success(known + titles))
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        sourceHasNext[source.id] = false
+                    }
+                }
+            }
+                .awaitAll()
+
+            state.update { it.copy(loadingMore = false, canLoadMore = sourceHasNext.values.any { next -> next }) }
+            state.value.filters.let {
+                if (it.statuses.isNotEmpty() || it.tags.isNotEmpty()) loadFilterDetails()
+            }
         }
     }
 
@@ -385,6 +449,8 @@ abstract class SearchViewModel(
         val items: Map<Source, SearchItemResult> = mapOf(),
         val dialog: Dialog? = null,
         val filters: SearchFilters = SearchFilters(),
+        val canLoadMore: Boolean = false,
+        val loadingMore: Boolean = false,
         val extensions: List<Pair<String, String>> = emptyList(),
         val details: Map<Long, MangaDetails> = emptyMap(),
         val detailsProgress: Pair<Int, Int>? = null,
@@ -473,6 +539,7 @@ private fun buildUnifiedGroups(items: Map<Source, SearchItemResult>): List<Unifi
 }
 
 private val CHAPTER_COUNT_TIMEOUT = 12.seconds
+private val LOAD_MORE_TIMEOUT = 25.seconds
 
 enum class SourceFilter {
     All,

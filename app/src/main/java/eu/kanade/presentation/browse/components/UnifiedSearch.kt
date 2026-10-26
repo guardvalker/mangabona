@@ -2,16 +2,19 @@ package eu.kanade.presentation.browse.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,8 +48,11 @@ fun UnifiedSearchContent(
     contentPadding: PaddingValues,
     getManga: @Composable (Manga) -> State<Manga>,
     onClickGroup: (UnifiedGroup) -> Unit,
+    canLoadMore: Boolean = false,
+    loadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
 ) {
-    if (groups.isEmpty()) {
+    if (groups.isEmpty() && !canLoadMore) {
         EmptyScreen(
             stringRes = MR.strings.no_results_found,
             modifier = Modifier.padding(contentPadding),
@@ -73,6 +79,19 @@ fun UnifiedSearchContent(
                 onClick = { onClickGroup(group) },
                 onLongClick = { onClickGroup(group) },
             )
+        }
+        if (canLoadMore) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                    if (loadingMore) {
+                        CircularProgressIndicator()
+                    } else {
+                        Button(onClick = onLoadMore) {
+                            Text(text = stringResource(MR.strings.search_load_more))
+                        }
+                    }
+                }
+            }
         }
     }
 }

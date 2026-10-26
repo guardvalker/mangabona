@@ -40,6 +40,7 @@ fun GlobalSearchScreen(
     onClickItem: (Manga) -> Unit,
     onLongClickItem: (Manga) -> Unit,
     onApplyFilters: (SearchFilters) -> Unit,
+    onLoadMore: () -> Unit,
     onClickGroup: (UnifiedGroup) -> Unit,
 ) {
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -98,6 +99,9 @@ fun GlobalSearchScreen(
             contentPadding = paddingValues,
             getManga = getManga,
             onClickGroup = onClickGroup,
+            canLoadMore = state.canLoadMore,
+            loadingMore = state.loadingMore,
+            onLoadMore = onLoadMore,
         )
     }
 
