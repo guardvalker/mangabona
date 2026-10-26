@@ -131,9 +131,10 @@ fun SearchFilterSheet(
                 keyboardActions = KeyboardActions(onDone = { toggleTyped() }),
             )
 
-            val suggestions = availableTags.filter {
-                it.first.lowercase() !in filters.tags && it.first.lowercase().contains(typedLower)
-            }
+            // Hundreds of tags can turn up, so only the most common ones show until something is typed
+            val suggestions = availableTags
+                .filter { it.first.lowercase() !in filters.tags && it.first.lowercase().contains(typedLower) }
+                .take(if (typed.isEmpty()) 24 else 60)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
                 filters.tags.forEach { tag ->
                     FilterChip(

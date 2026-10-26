@@ -381,18 +381,20 @@ abstract class SearchViewModel(
         val unifiedGroupsUnfiltered: List<UnifiedGroup> = buildUnifiedGroups(items)
         val unifiedGroups: List<UnifiedGroup> = unifiedGroupsUnfiltered.filtered()
 
-        // Tags found in the results, the most common first
+        // Tags of the titles being shown, the most common first, with how many titles each one would leave
         val availableTags: List<Pair<String, Int>> by lazy {
-            unifiedGroupsUnfiltered
+            val seen = unifiedGroups
                 .flatMap { group -> group.entries.flatMap { genresOf(it.manga) }.distinctBy { it.lowercase() } }
                 .groupBy { it.lowercase() }
                 .map { (_, names) -> names.first() to names.size }
                 .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
-                .let { seen ->
-                    // The usual ones are offered from the start, before there is anything searched
-                    val known = seen.map { it.first.lowercase() }.toSet()
-                    seen + COMMON_TAGS.filter { it.lowercase() !in known }.map { it to 0 }
-                }
+            if (filters.isActive) {
+                seen
+            } else {
+                // The usual ones are offered from the start, before there is anything searched
+                val known = seen.map { it.first.lowercase() }.toSet()
+                seen + COMMON_TAGS.filter { it.lowercase() !in known }.map { it to 0 }
+            }
         }
 
         fun statusOf(manga: Manga): Long = details[manga.id]?.status ?: manga.status
