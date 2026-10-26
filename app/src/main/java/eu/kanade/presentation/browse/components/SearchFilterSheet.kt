@@ -9,15 +9,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.tachiyomi.source.model.SManga
@@ -98,21 +106,65 @@ fun SearchFilterSheet(
             }
 
             Text(text = stringResource(MR.strings.search_tags), style = MaterialTheme.typography.titleSmall)
-            if (availableTags.isEmpty()) {
+
+            var query by remember { mutableStateOf("") }
+            val typed = query.trim()
+            val typedLower = typed.lowercase()
+            val knownTags = availableTags.associate { it.first.lowercase() to it.first }
+
+            // Typing narrows the known tags down; a word that isn't one of them can still be used as it is
+            fun toggleTyped() {
+                if (typed.isEmpty()) return
+                val match = availableTags.firstOrNull { it.first.lowercase() == typedLower }
+                    ?: availableTags.firstOrNull { it.first.lowercase().contains(typedLower) }
+                onToggleTag(match?.first ?: typed)
+                query = ""
+            }
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text(text = stringResource(MR.strings.search_tags_hint)) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { toggleTyped() }),
+            )
+
+            val suggestions = availableTags.filter {
+                it.first.lowercase() !in filters.tags && it.first.lowercase().contains(typedLower)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                filters.tags.forEach { tag ->
+                    FilterChip(
+                        selected = true,
+                        onClick = { onToggleTag(tag) },
+                        label = { Text(text = knownTags[tag] ?: tag) },
+                    )
+                }
+                if (typed.isNotEmpty() && typedLower !in knownTags && typedLower !in filters.tags) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { toggleTyped() },
+                        label = { Text(text = stringResource(MR.strings.search_tags_add, typed)) },
+                    )
+                }
+                suggestions.forEach { (tag, count) ->
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            onToggleTag(tag)
+                            query = ""
+                        },
+                        label = { Text(text = "$tag · $count") },
+                    )
+                }
+            }
+            if (availableTags.isEmpty() && typed.isEmpty()) {
                 Text(
                     text = stringResource(MR.strings.search_tags_empty),
                     style = MaterialTheme.typography.bodySmall,
                 )
-            } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
-                    availableTags.forEach { (tag, count) ->
-                        FilterChip(
-                            selected = tag.lowercase() in filters.tags,
-                            onClick = { onToggleTag(tag) },
-                            label = { Text(text = "$tag · $count") },
-                        )
-                    }
-                }
             }
         }
     }
