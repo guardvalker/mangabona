@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -23,8 +24,10 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.ui.browse.source.globalsearch.LibraryFilter
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchFilters
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import mihon.icons.materialsymbols.MaterialSymbols
@@ -52,8 +55,8 @@ fun GlobalSearchToolbar(
     filters: SearchFilters? = null,
     availableTags: List<Pair<String, Int>> = emptyList(),
     onClickFilter: () -> Unit = {},
-    onToggleStatus: (Long) -> Unit = {},
-    onToggleTag: (String) -> Unit = {},
+    detailsProgress: Pair<Int, Int>? = null,
+    onChangeFilters: (SearchFilters) -> Unit = {},
 ) {
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
         Box {
@@ -128,13 +131,31 @@ fun GlobalSearchToolbar(
                 filters.statuses.forEach { status ->
                     ActiveFilterChip(
                         label = statusLabel(status),
-                        onClick = { onToggleStatus(status) },
+                        onClick = { onChangeFilters(filters.copy(statuses = filters.statuses - status)) },
                     )
                 }
                 filters.tags.forEach { tag ->
                     ActiveFilterChip(
                         label = availableTags.firstOrNull { it.first.lowercase() == tag }?.first ?: tag,
-                        onClick = { onToggleTag(tag) },
+                        onClick = { onChangeFilters(filters.copy(tags = filters.tags - tag)) },
+                    )
+                }
+                if (filters.library != LibraryFilter.Any) {
+                    ActiveFilterChip(
+                        label = libraryLabel(filters.library),
+                        onClick = { onChangeFilters(filters.copy(library = LibraryFilter.Any)) },
+                    )
+                }
+
+                if (detailsProgress != null) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = stringResource(
+                            MR.strings.search_filter_loading,
+                            detailsProgress.first,
+                            detailsProgress.second,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             } else {
@@ -186,5 +207,14 @@ internal fun statusLabel(status: Long): String = stringResource(
         SManga.CANCELLED -> MR.strings.cancelled
         SManga.ON_HIATUS -> MR.strings.on_hiatus
         else -> MR.strings.unknown_status
+    },
+)
+
+@Composable
+internal fun libraryLabel(filter: LibraryFilter): String = stringResource(
+    when (filter) {
+        LibraryFilter.Any -> MR.strings.all
+        LibraryFilter.InLibrary -> MR.strings.in_library
+        LibraryFilter.NotInLibrary -> MR.strings.not_in_library
     },
 )

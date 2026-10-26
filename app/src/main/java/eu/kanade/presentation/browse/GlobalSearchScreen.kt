@@ -17,6 +17,7 @@ import eu.kanade.presentation.browse.components.GlobalSearchToolbar
 import eu.kanade.presentation.browse.components.SearchFilterSheet
 import eu.kanade.presentation.browse.components.UnifiedSearchContent
 import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchFilters
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchItemResult
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchViewModel
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
@@ -36,10 +37,7 @@ fun GlobalSearchScreen(
     onClickSource: (Source) -> Unit,
     onClickItem: (Manga) -> Unit,
     onLongClickItem: (Manga) -> Unit,
-    onOpenFilter: () -> Unit,
-    onToggleStatus: (Long) -> Unit,
-    onToggleTag: (String) -> Unit,
-    onClearFilters: () -> Unit,
+    onApplyFilters: (SearchFilters) -> Unit,
     onClickGroup: (UnifiedGroup) -> Unit,
 ) {
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -60,12 +58,9 @@ fun GlobalSearchScreen(
                 scrollBehavior = scrollBehavior,
                 filters = state.filters,
                 availableTags = state.availableTags,
-                onClickFilter = {
-                    onOpenFilter()
-                    showFilterSheet = true
-                },
-                onToggleStatus = onToggleStatus,
-                onToggleTag = onToggleTag,
+                detailsProgress = state.detailsProgress,
+                onClickFilter = { showFilterSheet = true },
+                onChangeFilters = onApplyFilters,
             )
         },
     ) { paddingValues ->
@@ -81,10 +76,7 @@ fun GlobalSearchScreen(
         SearchFilterSheet(
             filters = state.filters,
             availableTags = state.availableTags,
-            detailsProgress = state.detailsProgress,
-            onToggleStatus = onToggleStatus,
-            onToggleTag = onToggleTag,
-            onClear = onClearFilters,
+            onApply = onApplyFilters,
             onDismissRequest = { showFilterSheet = false },
         )
     }

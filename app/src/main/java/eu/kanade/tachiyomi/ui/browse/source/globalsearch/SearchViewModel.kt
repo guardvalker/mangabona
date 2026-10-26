@@ -132,28 +132,15 @@ abstract class SearchViewModel(
         preferences.globalSearchFilterState.toggle()
     }
 
-    fun toggleStatusFilter(status: Long) {
-        state.update { it.copy(filters = it.filters.copy(statuses = it.filters.statuses.toggled(status))) }
-        onFiltersChanged()
-    }
-
-    fun toggleTagFilter(tag: String) {
-        state.update { it.copy(filters = it.filters.copy(tags = it.filters.tags.toggled(tag.lowercase()))) }
-        onFiltersChanged()
-    }
-
-    fun clearFilters() {
-        state.update { it.copy(filters = SearchFilters()) }
-        onFiltersChanged()
-    }
-
     /**
-     * Without a word to search, the filters alone list what the sources have (their popular titles) and
-     * keep only the ones that match; with no filters either there is nothing to show.
+     * Applies the filters picked in the sheet. Without a word to search, the filters alone list what the
+     * sources have (their popular titles) and keep the ones that match; with no filters either there is
+     * nothing to show. Nothing is requested until this is called.
      */
-    private fun onFiltersChanged() {
+    fun applyFilters(filters: SearchFilters) {
+        state.update { it.copy(filters = filters) }
         if (state.value.searchQuery.isNullOrBlank()) {
-            if (state.value.filters.isActive) {
+            if (filters.isActive) {
                 search()
             } else {
                 searchJob?.cancel()
@@ -162,7 +149,7 @@ abstract class SearchViewModel(
                 state.update { it.copy(items = emptyMap(), detailsProgress = null) }
             }
         }
-        if (state.value.filters.isActive) loadFilterDetails()
+        if (filters.statuses.isNotEmpty() || filters.tags.isNotEmpty()) loadFilterDetails()
     }
 
     /**
@@ -328,7 +315,7 @@ abstract class SearchViewModel(
             }
                 .awaitAll()
 
-            if (state.value.filters.isActive) loadFilterDetails()
+            state.value.filters.let { if (it.statuses.isNotEmpty() || it.tags.isNotEmpty()) loadFilterDetails() }
         }
     }
 
@@ -381,20 +368,16 @@ abstract class SearchViewModel(
         val unifiedGroupsUnfiltered: List<UnifiedGroup> = buildUnifiedGroups(items)
         val unifiedGroups: List<UnifiedGroup> = unifiedGroupsUnfiltered.filtered()
 
-        // Tags of the titles being shown, the most common first, with how many titles each one would leave
+        // Tags of the titles found, the most common first, then the usual ones
         val availableTags: List<Pair<String, Int>> by lazy {
-            val seen = unifiedGroups
+            val seen = unifiedGroupsUnfiltered
                 .flatMap { group -> group.entries.flatMap { genresOf(it.manga) }.distinctBy { it.lowercase() } }
                 .groupBy { it.lowercase() }
                 .map { (_, names) -> names.first() to names.size }
                 .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
-            if (filters.isActive) {
-                seen
-            } else {
-                // The usual ones are offered from the start, before there is anything searched
-                val known = seen.map { it.first.lowercase() }.toSet()
-                seen + COMMON_TAGS.filter { it.lowercase() !in known }.map { it to 0 }
-            }
+            // The usual ones are offered from the start, before there is anything searched
+            val known = seen.map { it.first.lowercase() }.toSet()
+            seen + COMMON_TAGS.filter { it.lowercase() !in known }.map { it to 0 }
         }
 
         fun statusOf(manga: Manga): Long = details[manga.id]?.status ?: manga.status
@@ -407,7 +390,12 @@ abstract class SearchViewModel(
             if (!filters.isActive) return this
             return mapNotNull { group ->
                 val entries = group.entries.filter { entry ->
-                    (filters.statuses.isEmpty() || statusOf(entry.manga) in filters.statuses) &&
+                    when (filters.library) {
+                        LibraryFilter.Any -> true
+                        LibraryFilter.InLibrary -> entry.manga.favorite
+                        LibraryFilter.NotInLibrary -> !entry.manga.favorite
+                    } &&
+                        (filters.statuses.isEmpty() || statusOf(entry.manga) in filters.statuses) &&
                         filters.tags.all { tag -> genresOf(entry.manga).any { it.lowercase() == tag } }
                 }
                 if (entries.isEmpty()) null else group.copy(entries = entries)
@@ -463,15 +451,23 @@ enum class SourceFilter {
  * Tags are kept lowercase.
  */
 @Immutable
-data class SearchFilters(val statuses: Set<Long> = emptySet(), val tags: Set<String> = emptySet()) {
-    val count: Int get() = statuses.size + tags.size
+data class SearchFilters(
+    val statuses: Set<Long> = emptySet(),
+    val tags: Set<String> = emptySet(),
+    val library: LibraryFilter = LibraryFilter.Any,
+) {
+    val count: Int get() = statuses.size + tags.size + if (library == LibraryFilter.Any) 0 else 1
     val isActive: Boolean get() = count > 0
+}
+
+enum class LibraryFilter {
+    Any,
+    InLibrary,
+    NotInLibrary,
 }
 
 @Immutable
 data class MangaDetails(val status: Long, val genres: List<String>)
-
-private fun <T> Set<T>.toggled(value: T): Set<T> = if (value in this) this - value else this + value
 
 private const val MAX_DETAIL_REQUESTS = 120
 
