@@ -9,7 +9,6 @@ import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactory
 import dev.zacsweers.metrox.viewmodel.ManualViewModelAssistedFactoryKey
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
-import eu.kanade.tachiyomi.source.Source
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.NetworkToLocalManga
 import tachiyomi.domain.source.service.SourceManager
@@ -44,16 +43,7 @@ class GlobalSearchViewModel(
     init {
         extensionFilter = initialExtensionFilter
         if (initialQuery.isNotBlank() || !initialExtensionFilter.isNullOrBlank()) {
-            if (extensionFilter != null) {
-                // we're going to use custom extension filter instead
-                setSourceFilter(SourceFilter.All)
-            }
             search()
         }
-    }
-
-    override suspend fun getEnabledSources(): List<Source> {
-        return super.getEnabledSources()
-            .filter { state.value.sourceFilter != SourceFilter.PinnedOnly || "${it.id}" in pinnedSources }
     }
 }

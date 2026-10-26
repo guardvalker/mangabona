@@ -61,13 +61,15 @@ class GlobalSearchScreen(
                 onSearch = { viewModel.search() },
                 getManga = { viewModel.getManga(it) },
                 onChangeSearchFilter = viewModel::setSourceFilter,
-                onToggleResults = viewModel::toggleFilterResults,
                 onClickSource = {
                     navigator.push(BrowseSourceScreen(it.id, state.searchQuery))
                 },
                 onClickItem = { navigator.push(MangaScreen(it.id, true)) },
                 onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                onToggleUnified = viewModel::toggleUnified,
+                onOpenFilter = viewModel::loadFilterDetails,
+                onToggleStatus = viewModel::toggleStatusFilter,
+                onToggleTag = viewModel::toggleTagFilter,
+                onClearFilters = viewModel::clearFilters,
                 onClickGroup = { group ->
                     val single = group.entries.singleOrNull()
                     if (single != null) {

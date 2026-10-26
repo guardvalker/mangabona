@@ -81,11 +81,6 @@ class SourcePreferences(
         false,
     )
 
-    val globalSearchUnified: Preference<Boolean> = preferenceStore.getBoolean(
-        Preference.appStateKey("global_search_unified"),
-        true,
-    )
-
     // Explore hides the extensions marked 18+ unless they are in the shown set, and shows the rest unless they
     // are in the hidden one
     val exploreShownExtensions: Preference<Set<String>> = preferenceStore.getStringSet(

@@ -24,12 +24,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.components.SearchToolbar
+import eu.kanade.tachiyomi.source.model.SManga
+import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchFilters
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Close
 import mihon.icons.materialsymbols.rounded.DoneAll
 import mihon.icons.materialsymbols.rounded.FilterList
-import mihon.icons.materialsymbols.rounded.Group
-import mihon.icons.materialsymbols.rounded.Keep
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -46,10 +47,13 @@ fun GlobalSearchToolbar(
     sourceFilter: SourceFilter,
     onChangeSearchFilter: (SourceFilter) -> Unit,
     onlyShowHasResults: Boolean,
-    onToggleResults: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
-    unified: Boolean? = null,
-    onToggleUnified: () -> Unit = {},
+    onToggleResults: () -> Unit = {},
+    filters: SearchFilters? = null,
+    availableTags: List<Pair<String, Int>> = emptyList(),
+    onClickFilter: () -> Unit = {},
+    onToggleStatus: (Long) -> Unit = {},
+    onToggleTag: (String) -> Unit = {},
 ) {
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
         Box {
@@ -81,21 +85,6 @@ fun GlobalSearchToolbar(
             // TODO: make this UX better; it only applies when triggering a new search
             if (!hideSourceFilter) {
                 FilterChip(
-                    selected = sourceFilter == SourceFilter.PinnedOnly,
-                    onClick = { onChangeSearchFilter(SourceFilter.PinnedOnly) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = MaterialSymbols.Rounded.Keep,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(FilterChipDefaults.IconSize),
-                        )
-                    },
-                    label = {
-                        Text(text = stringResource(MR.strings.pinned_sources))
-                    },
-                )
-                FilterChip(
                     selected = sourceFilter == SourceFilter.All,
                     onClick = { onChangeSearchFilter(SourceFilter.All) },
                     leadingIcon = {
@@ -114,37 +103,54 @@ fun GlobalSearchToolbar(
                 VerticalDivider(modifier = Modifier.height(FilterChipDefaults.Height))
             }
 
-            FilterChip(
-                selected = onlyShowHasResults,
-                onClick = { onToggleResults() },
-                leadingIcon = {
-                    Icon(
-                        imageVector = MaterialSymbols.Rounded.FilterList,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(FilterChipDefaults.IconSize),
-                    )
-                },
-                label = {
-                    Text(text = stringResource(MR.strings.has_results))
-                },
-            )
-
-            // Only the global search groups titles, the migration search doesn't
-            if (unified != null) {
+            if (filters != null) {
+                // Global search: filter the titles by status and tags
                 FilterChip(
-                    selected = unified,
-                    onClick = onToggleUnified,
+                    selected = filters.isActive,
+                    onClick = onClickFilter,
                     leadingIcon = {
                         Icon(
-                            imageVector = MaterialSymbols.Rounded.Group,
+                            imageVector = MaterialSymbols.Rounded.FilterList,
                             contentDescription = null,
                             modifier = Modifier
                                 .size(FilterChipDefaults.IconSize),
                         )
                     },
                     label = {
-                        Text(text = stringResource(MR.strings.unified_results))
+                        Text(
+                            text = stringResource(MR.strings.action_filter) +
+                                if (filters.isActive) " (${filters.count})" else "",
+                        )
+                    },
+                )
+
+                // What is being filtered by, one tap to drop each
+                filters.statuses.forEach { status ->
+                    ActiveFilterChip(
+                        label = statusLabel(status),
+                        onClick = { onToggleStatus(status) },
+                    )
+                }
+                filters.tags.forEach { tag ->
+                    ActiveFilterChip(
+                        label = availableTags.firstOrNull { it.first.lowercase() == tag }?.first ?: tag,
+                        onClick = { onToggleTag(tag) },
+                    )
+                }
+            } else {
+                FilterChip(
+                    selected = onlyShowHasResults,
+                    onClick = { onToggleResults() },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = MaterialSymbols.Rounded.FilterList,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(FilterChipDefaults.IconSize),
+                        )
+                    },
+                    label = {
+                        Text(text = stringResource(MR.strings.has_results))
                     },
                 )
             }
@@ -153,3 +159,32 @@ fun GlobalSearchToolbar(
         HorizontalDivider()
     }
 }
+
+@Composable
+private fun ActiveFilterChip(label: String, onClick: () -> Unit) {
+    FilterChip(
+        selected = true,
+        onClick = onClick,
+        trailingIcon = {
+            Icon(
+                imageVector = MaterialSymbols.Rounded.Close,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize),
+            )
+        },
+        label = { Text(text = label) },
+    )
+}
+
+@Composable
+internal fun statusLabel(status: Long): String = stringResource(
+    when (status.toInt()) {
+        SManga.ONGOING -> MR.strings.ongoing
+        SManga.COMPLETED -> MR.strings.completed
+        SManga.LICENSED -> MR.strings.licensed
+        SManga.PUBLISHING_FINISHED -> MR.strings.publishing_finished
+        SManga.CANCELLED -> MR.strings.cancelled
+        SManga.ON_HIATUS -> MR.strings.on_hiatus
+        else -> MR.strings.unknown_status
+    },
+)

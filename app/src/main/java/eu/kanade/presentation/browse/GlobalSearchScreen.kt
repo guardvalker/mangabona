@@ -4,12 +4,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import eu.kanade.presentation.browse.components.GlobalSearchCardRow
 import eu.kanade.presentation.browse.components.GlobalSearchErrorResultItem
 import eu.kanade.presentation.browse.components.GlobalSearchLoadingResultItem
 import eu.kanade.presentation.browse.components.GlobalSearchResultItem
 import eu.kanade.presentation.browse.components.GlobalSearchToolbar
+import eu.kanade.presentation.browse.components.SearchFilterSheet
 import eu.kanade.presentation.browse.components.UnifiedSearchContent
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SearchItemResult
@@ -27,14 +32,18 @@ fun GlobalSearchScreen(
     onChangeSearchQuery: (String?) -> Unit,
     onSearch: (String) -> Unit,
     onChangeSearchFilter: (SourceFilter) -> Unit,
-    onToggleResults: () -> Unit,
     getManga: @Composable (Manga) -> State<Manga>,
     onClickSource: (Source) -> Unit,
     onClickItem: (Manga) -> Unit,
     onLongClickItem: (Manga) -> Unit,
-    onToggleUnified: () -> Unit,
+    onOpenFilter: () -> Unit,
+    onToggleStatus: (Long) -> Unit,
+    onToggleTag: (String) -> Unit,
+    onClearFilters: () -> Unit,
     onClickGroup: (UnifiedGroup) -> Unit,
 ) {
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = { scrollBehavior ->
             GlobalSearchToolbar(
@@ -48,30 +57,36 @@ fun GlobalSearchScreen(
                 sourceFilter = state.sourceFilter,
                 onChangeSearchFilter = onChangeSearchFilter,
                 onlyShowHasResults = state.onlyShowHasResults,
-                onToggleResults = onToggleResults,
                 scrollBehavior = scrollBehavior,
-                unified = state.unified,
-                onToggleUnified = onToggleUnified,
+                filters = state.filters,
+                availableTags = state.availableTags,
+                onClickFilter = {
+                    onOpenFilter()
+                    showFilterSheet = true
+                },
+                onToggleStatus = onToggleStatus,
+                onToggleTag = onToggleTag,
             )
         },
     ) { paddingValues ->
-        if (state.unified) {
-            UnifiedSearchContent(
-                groups = state.unifiedGroups,
-                contentPadding = paddingValues,
-                getManga = getManga,
-                onClickGroup = onClickGroup,
-            )
-        } else {
-            GlobalSearchContent(
-                items = state.filteredItems,
-                contentPadding = paddingValues,
-                getManga = getManga,
-                onClickSource = onClickSource,
-                onClickItem = onClickItem,
-                onLongClickItem = onLongClickItem,
-            )
-        }
+        UnifiedSearchContent(
+            groups = state.unifiedGroups,
+            contentPadding = paddingValues,
+            getManga = getManga,
+            onClickGroup = onClickGroup,
+        )
+    }
+
+    if (showFilterSheet) {
+        SearchFilterSheet(
+            filters = state.filters,
+            availableTags = state.availableTags,
+            detailsProgress = state.detailsProgress,
+            onToggleStatus = onToggleStatus,
+            onToggleTag = onToggleTag,
+            onClear = onClearFilters,
+            onDismissRequest = { showFilterSheet = false },
+        )
     }
 }
 

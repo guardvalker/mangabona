@@ -37,7 +37,9 @@
     <string name="label_explore">Explore</string>
     <string name="explore_random">Random pick</string>
     <string name="explore_random_none">Nothing new to suggest right now</string>
-    <string name="unified_results">Unified</string>
+    <string name="search_tags">Tags</string>
+    <string name="search_tags_empty">No tags found in these results</string>
+    <string name="search_filter_loading">Loading details… %1$d/%2$d</string>
     <string name="unified_open_best">Open best</string>
     <string name="unified_chapters">%1$d chapters</string>
     <string name="label_extension_info">Extension info</string>

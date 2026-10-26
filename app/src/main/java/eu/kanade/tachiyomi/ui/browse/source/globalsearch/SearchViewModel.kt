@@ -55,6 +55,7 @@ abstract class SearchViewModel(
     private val coroutineDispatcher = Dispatchers.IO.limitedParallelism(5)
     private var searchJob: Job? = null
     private var chapterCountsJob: Job? = null
+    private var detailsJob: Job? = null
 
     private val enabledLanguages = sourcePreferences.enabledLanguages.get()
     private val disabledSources = sourcePreferences.disabledSources.get()
@@ -77,11 +78,6 @@ abstract class SearchViewModel(
         viewModelScope.launch {
             preferences.globalSearchFilterState.changes().collectLatest { onlyShowHasResults ->
                 state.update { it.copy(onlyShowHasResults = onlyShowHasResults) }
-            }
-        }
-        viewModelScope.launch {
-            preferences.globalSearchUnified.changes().collectLatest { unified ->
-                state.update { it.copy(unified = unified) }
             }
         }
     }
@@ -135,8 +131,62 @@ abstract class SearchViewModel(
         preferences.globalSearchFilterState.toggle()
     }
 
-    fun toggleUnified() {
-        preferences.globalSearchUnified.toggle()
+    fun toggleStatusFilter(status: Long) {
+        state.update { it.copy(filters = it.filters.copy(statuses = it.filters.statuses.toggled(status))) }
+    }
+
+    fun toggleTagFilter(tag: String) {
+        state.update { it.copy(filters = it.filters.copy(tags = it.filters.tags.toggled(tag.lowercase()))) }
+    }
+
+    fun clearFilters() {
+        state.update { it.copy(filters = SearchFilters()) }
+    }
+
+    /**
+     * Search listings rarely carry the status or the tags, so when the filter is opened the titles that lack
+     * them get their details fetched (one request per title, not stored), which is what makes filtering by
+     * them useful.
+     */
+    fun loadFilterDetails() {
+        if (detailsJob?.isActive == true) return
+        val pending = state.value.unifiedGroupsUnfiltered
+            .filter { group -> group.entries.none { state.value.hasDetails(it.manga) } }
+            .take(MAX_DETAIL_REQUESTS)
+            .map { it.entries.first() }
+        if (pending.isEmpty()) return
+
+        detailsJob = viewModelScope.launch(Dispatchers.IO) {
+            state.update { it.copy(detailsProgress = 0 to pending.size) }
+            pending.map { entry ->
+                async {
+                    try {
+                        val manga = withTimeout(CHAPTER_COUNT_TIMEOUT) {
+                            withContext(coroutineDispatcher) {
+                                entry.source.getMangaUpdate(
+                                    manga = entry.manga.toSManga(),
+                                    chapters = emptyList(),
+                                    fetchDetails = true,
+                                    fetchChapters = false,
+                                )
+                            }
+                        }.manga
+                        val details = MangaDetails(
+                            status = manga.status.toLong(),
+                            genres = manga.getGenres().orEmpty(),
+                        )
+                        state.update { it.copy(details = it.details + (entry.manga.id to details)) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Left without details, so a filter won't match it
+                    }
+                    state.update { it.copy(detailsProgress = it.detailsProgress?.let { (done, total) -> done + 1 to total }) }
+                }
+            }
+                .awaitAll()
+            state.update { it.copy(detailsProgress = null) }
+        }
     }
 
     /**
@@ -197,6 +247,8 @@ abstract class SearchViewModel(
         this.lastSourceFilter = sourceFilter
 
         searchJob?.cancel()
+        detailsJob?.cancel()
+        state.update { it.copy(detailsProgress = null) }
 
         searchJob = viewModelScope.launch(Dispatchers.IO) {
             val sources = getSelectedSources()
@@ -278,18 +330,47 @@ abstract class SearchViewModel(
     data class State(
         val from: Manga? = null,
         val searchQuery: String? = null,
-        val sourceFilter: SourceFilter = SourceFilter.PinnedOnly,
+        val sourceFilter: SourceFilter = SourceFilter.All,
         val onlyShowHasResults: Boolean = false,
         val items: Map<Source, SearchItemResult> = mapOf(),
         val dialog: Dialog? = null,
-        val unified: Boolean = true,
+        val filters: SearchFilters = SearchFilters(),
+        val details: Map<Long, MangaDetails> = emptyMap(),
+        val detailsProgress: Pair<Int, Int>? = null,
         val unifiedDialog: UnifiedGroup? = null,
         val chapterCounts: Map<Long, ChapterCount> = emptyMap(),
     ) {
         val progress: Int = items.count { it.value !is SearchItemResult.Loading }
         val total: Int = items.size
         val filteredItems = items.filter { (_, result) -> result.isVisible(onlyShowHasResults) }
-        val unifiedGroups: List<UnifiedGroup> = buildUnifiedGroups(items)
+        val unifiedGroupsUnfiltered: List<UnifiedGroup> = buildUnifiedGroups(items)
+        val unifiedGroups: List<UnifiedGroup> = unifiedGroupsUnfiltered.filtered()
+
+        // Tags found in the results, the most common first
+        val availableTags: List<Pair<String, Int>> by lazy {
+            unifiedGroupsUnfiltered
+                .flatMap { group -> group.entries.flatMap { genresOf(it.manga) }.distinctBy { it.lowercase() } }
+                .groupBy { it.lowercase() }
+                .map { (_, names) -> names.first() to names.size }
+                .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+        }
+
+        fun statusOf(manga: Manga): Long = details[manga.id]?.status ?: manga.status
+
+        fun genresOf(manga: Manga): List<String> = details[manga.id]?.genres ?: manga.genre.orEmpty()
+
+        fun hasDetails(manga: Manga): Boolean = manga.id in details || manga.status != 0L || !manga.genre.isNullOrEmpty()
+
+        private fun List<UnifiedGroup>.filtered(): List<UnifiedGroup> {
+            if (!filters.isActive) return this
+            return mapNotNull { group ->
+                val entries = group.entries.filter { entry ->
+                    (filters.statuses.isEmpty() || statusOf(entry.manga) in filters.statuses) &&
+                        filters.tags.all { tag -> genresOf(entry.manga).any { it.lowercase() == tag } }
+                }
+                if (entries.isEmpty()) null else group.copy(entries = entries)
+            }
+        }
     }
 
     sealed interface Dialog {
@@ -333,8 +414,24 @@ private val CHAPTER_COUNT_TIMEOUT = 12.seconds
 
 enum class SourceFilter {
     All,
-    PinnedOnly,
 }
+
+/**
+ * Narrows the titles found. Any of the chosen statuses may match, but a title needs all the chosen tags.
+ * Tags are kept lowercase.
+ */
+@Immutable
+data class SearchFilters(val statuses: Set<Long> = emptySet(), val tags: Set<String> = emptySet()) {
+    val count: Int get() = statuses.size + tags.size
+    val isActive: Boolean get() = count > 0
+}
+
+@Immutable
+data class MangaDetails(val status: Long, val genres: List<String>)
+
+private fun <T> Set<T>.toggled(value: T): Set<T> = if (value in this) this - value else this + value
+
+private const val MAX_DETAIL_REQUESTS = 120
 
 sealed interface SearchItemResult {
     data object Loading : SearchItemResult
