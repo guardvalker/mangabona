@@ -65,6 +65,7 @@ abstract class SearchViewModel(
 
     private var lastQuery: String? = null
     private var lastSourceFilter: SourceFilter? = null
+    private var lastExcludedExtensions: Set<String> = emptySet()
 
     protected var extensionFilter: String? = null
 
@@ -77,6 +78,14 @@ abstract class SearchViewModel(
     }
 
     init {
+        viewModelScope.launch {
+            // The extensions that can be left out of a search
+            val extensions = extensionManager.getLoadedExtensions()
+                .filter { ext -> ext.sources.any { it.lang in enabledLanguages || it.isLocal() } }
+                .map { it.pkgName to it.name }
+                .sortedBy { it.second.lowercase() }
+            state.update { it.copy(extensions = extensions) }
+        }
         viewModelScope.launch {
             preferences.globalSearchFilterState.changes().collectLatest { onlyShowHasResults ->
                 state.update { it.copy(onlyShowHasResults = onlyShowHasResults) }
@@ -107,7 +116,19 @@ abstract class SearchViewModel(
     }
 
     private suspend fun getSelectedSources(): List<Source> {
-        val enabledSources = getEnabledSources()
+        val excluded = state.value.filters.excludedExtensions
+        val enabledSources = getEnabledSources().let { sources ->
+            if (excluded.isEmpty()) {
+                sources
+            } else {
+                val excludedIds = extensionManager.getLoadedExtensions()
+                    .filter { it.pkgName in excluded }
+                    .flatMap { it.sources }
+                    .map { it.id }
+                    .toSet()
+                sources.filter { it.id !in excludedIds }
+            }
+        }
 
         val filter = extensionFilter
         if (filter.isNullOrEmpty()) {
@@ -140,7 +161,9 @@ abstract class SearchViewModel(
      */
     fun applyFilters(filters: SearchFilters) {
         state.update { it.copy(filters = filters) }
-        if (state.value.searchQuery.isNullOrBlank()) {
+        if (!state.value.searchQuery.isNullOrBlank()) {
+            search()
+        } else {
             if (filters.isActive) {
                 search()
             } else {
@@ -260,10 +283,12 @@ abstract class SearchViewModel(
         if (query.isBlank() && !state.value.filters.isActive) return
 
         val sameQuery = this.lastQuery == query
-        if (sameQuery && this.lastSourceFilter == sourceFilter) return
+        val excluded = state.value.filters.excludedExtensions
+        if (sameQuery && this.lastSourceFilter == sourceFilter && this.lastExcludedExtensions == excluded) return
 
         this.lastQuery = query
         this.lastSourceFilter = sourceFilter
+        this.lastExcludedExtensions = excluded
 
         searchJob?.cancel()
         detailsJob?.cancel()
@@ -360,6 +385,7 @@ abstract class SearchViewModel(
         val items: Map<Source, SearchItemResult> = mapOf(),
         val dialog: Dialog? = null,
         val filters: SearchFilters = SearchFilters(),
+        val extensions: List<Pair<String, String>> = emptyList(),
         val details: Map<Long, MangaDetails> = emptyMap(),
         val detailsProgress: Pair<Int, Int>? = null,
         val unifiedDialog: UnifiedGroup? = null,
@@ -454,15 +480,16 @@ enum class SourceFilter {
 
 /**
  * Narrows the titles found. Any of the chosen statuses may match, but a title needs all the chosen tags.
- * Tags are kept lowercase.
+ * Tags are kept lowercase. Excluded extensions (by package name) aren't searched at all.
  */
 @Immutable
 data class SearchFilters(
     val statuses: Set<Long> = emptySet(),
     val tags: Set<String> = emptySet(),
     val library: LibraryFilter = LibraryFilter.Any,
+    val excludedExtensions: Set<String> = emptySet(),
 ) {
-    val count: Int get() = statuses.size + tags.size + if (library == LibraryFilter.Any) 0 else 1
+    val count: Int get() = statuses.size + tags.size + excludedExtensions.size + if (library == LibraryFilter.Any) 0 else 1
     val isActive: Boolean get() = count > 0
 }
 

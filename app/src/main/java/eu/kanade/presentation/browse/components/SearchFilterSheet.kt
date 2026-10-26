@@ -52,6 +52,7 @@ private val STATUSES = listOf(
 fun SearchFilterSheet(
     filters: SearchFilters,
     availableTags: List<Pair<String, Int>>,
+    extensions: List<Pair<String, String>>,
     onApply: (SearchFilters) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -93,6 +94,27 @@ fun SearchFilterSheet(
                         onClick = { draft = draft.copy(library = option) },
                         label = { Text(text = libraryLabel(option)) },
                     )
+                }
+            }
+
+            if (extensions.isNotEmpty()) {
+                Text(text = stringResource(MR.strings.search_extensions), style = MaterialTheme.typography.titleSmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                    extensions.forEach { (pkg, name) ->
+                        FilterChip(
+                            selected = pkg !in draft.excludedExtensions,
+                            onClick = {
+                                draft = draft.copy(
+                                    excludedExtensions = if (pkg in draft.excludedExtensions) {
+                                        draft.excludedExtensions - pkg
+                                    } else {
+                                        draft.excludedExtensions + pkg
+                                    },
+                                )
+                            },
+                            label = { Text(text = name.removePrefix("Tachiyomi: ")) },
+                        )
+                    }
                 }
             }
 

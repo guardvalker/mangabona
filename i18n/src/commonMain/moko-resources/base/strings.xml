@@ -37,6 +37,7 @@
     <string name="label_explore">Explore</string>
     <string name="explore_random">Random pick</string>
     <string name="explore_random_none">Nothing new to suggest right now</string>
+    <string name="search_extensions">Extensions (tap to leave one out)</string>
     <string name="search_tags">Tags</string>
     <string name="not_in_library">Not in library</string>
     <string name="search_tags_hint">Search tags</string>

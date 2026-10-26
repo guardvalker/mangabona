@@ -85,6 +85,7 @@ fun GlobalSearchScreen(
                 scrollBehavior = scrollBehavior,
                 filters = state.filters,
                 availableTags = state.availableTags,
+                extensionNames = state.extensions.toMap(),
                 detailsProgress = state.detailsProgress,
                 statusText = statusText,
                 onClickFilter = { showFilterSheet = true },
@@ -104,6 +105,7 @@ fun GlobalSearchScreen(
         SearchFilterSheet(
             filters = state.filters,
             availableTags = state.availableTags,
+            extensions = state.extensions,
             onApply = onApplyFilters,
             onDismissRequest = { showFilterSheet = false },
         )

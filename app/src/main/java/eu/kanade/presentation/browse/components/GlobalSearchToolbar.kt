@@ -54,6 +54,7 @@ fun GlobalSearchToolbar(
     filters: SearchFilters? = null,
     availableTags: List<Pair<String, Int>> = emptyList(),
     onClickFilter: () -> Unit = {},
+    extensionNames: Map<String, String> = emptyMap(),
     detailsProgress: Pair<Int, Int>? = null,
     statusText: String? = null,
     onChangeFilters: (SearchFilters) -> Unit = {},
@@ -147,6 +148,13 @@ fun GlobalSearchToolbar(
                         onClick = { onChangeFilters(filters.copy(tags = filters.tags - tag)) },
                     )
                 }
+                filters.excludedExtensions.forEach { pkg ->
+                    ActiveFilterChip(
+                        label = "− " + (extensionNames[pkg]?.removePrefix("Tachiyomi: ") ?: pkg),
+                        onClick = { onChangeFilters(filters.copy(excludedExtensions = filters.excludedExtensions - pkg)) },
+                    )
+                }
+
                 if (filters.library != LibraryFilter.Any) {
                     ActiveFilterChip(
                         label = libraryLabel(filters.library),
