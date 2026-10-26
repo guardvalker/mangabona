@@ -56,6 +56,7 @@ abstract class SearchViewModel(
     private var searchJob: Job? = null
     private var chapterCountsJob: Job? = null
     private var detailsJob: Job? = null
+    private val detailsTried = mutableSetOf<Long>()
 
     private val enabledLanguages = sourcePreferences.enabledLanguages.get()
     private val disabledSources = sourcePreferences.disabledSources.get()
@@ -133,14 +134,35 @@ abstract class SearchViewModel(
 
     fun toggleStatusFilter(status: Long) {
         state.update { it.copy(filters = it.filters.copy(statuses = it.filters.statuses.toggled(status))) }
+        onFiltersChanged()
     }
 
     fun toggleTagFilter(tag: String) {
         state.update { it.copy(filters = it.filters.copy(tags = it.filters.tags.toggled(tag.lowercase()))) }
+        onFiltersChanged()
     }
 
     fun clearFilters() {
         state.update { it.copy(filters = SearchFilters()) }
+        onFiltersChanged()
+    }
+
+    /**
+     * Without a word to search, the filters alone list what the sources have (their popular titles) and
+     * keep only the ones that match; with no filters either there is nothing to show.
+     */
+    private fun onFiltersChanged() {
+        if (state.value.searchQuery.isNullOrBlank()) {
+            if (state.value.filters.isActive) {
+                search()
+            } else {
+                searchJob?.cancel()
+                detailsJob?.cancel()
+                lastQuery = null
+                state.update { it.copy(items = emptyMap(), detailsProgress = null) }
+            }
+        }
+        if (state.value.filters.isActive) loadFilterDetails()
     }
 
     /**
@@ -150,41 +172,48 @@ abstract class SearchViewModel(
      */
     fun loadFilterDetails() {
         if (detailsJob?.isActive == true) return
-        val pending = state.value.unifiedGroupsUnfiltered
-            .filter { group -> group.entries.none { state.value.hasDetails(it.manga) } }
-            .take(MAX_DETAIL_REQUESTS)
-            .map { it.entries.first() }
-        if (pending.isEmpty()) return
 
         detailsJob = viewModelScope.launch(Dispatchers.IO) {
-            state.update { it.copy(detailsProgress = 0 to pending.size) }
-            pending.map { entry ->
-                async {
-                    try {
-                        val manga = withTimeout(CHAPTER_COUNT_TIMEOUT) {
-                            withContext(coroutineDispatcher) {
-                                entry.source.getMangaUpdate(
-                                    manga = entry.manga.toSManga(),
-                                    chapters = emptyList(),
-                                    fetchDetails = true,
-                                    fetchChapters = false,
-                                )
-                            }
-                        }.manga
-                        val details = MangaDetails(
-                            status = manga.status.toLong(),
-                            genres = manga.getGenres().orEmpty(),
-                        )
-                        state.update { it.copy(details = it.details + (entry.manga.id to details)) }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        // Left without details, so a filter won't match it
+            while (isActive) {
+                val pending = state.value.unifiedGroupsUnfiltered
+                    .filter { group -> group.entries.none { state.value.hasDetails(it.manga) } }
+                    .map { it.entries.first() }
+                    .filter { it.manga.id !in detailsTried }
+                    .take(MAX_DETAIL_REQUESTS)
+                if (pending.isEmpty()) break
+
+                detailsTried += pending.map { it.manga.id }
+                state.update { it.copy(detailsProgress = 0 to pending.size) }
+                pending.map { entry ->
+                    async {
+                        try {
+                            val manga = withTimeout(CHAPTER_COUNT_TIMEOUT) {
+                                withContext(coroutineDispatcher) {
+                                    entry.source.getMangaUpdate(
+                                        manga = entry.manga.toSManga(),
+                                        chapters = emptyList(),
+                                        fetchDetails = true,
+                                        fetchChapters = false,
+                                    )
+                                }
+                            }.manga
+                            val details = MangaDetails(
+                                status = manga.status.toLong(),
+                                genres = manga.getGenres().orEmpty(),
+                            )
+                            state.update { it.copy(details = it.details + (entry.manga.id to details)) }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            // Left without details, so a filter won't match it
+                        }
+                        state.update {
+                            it.copy(detailsProgress = it.detailsProgress?.let { (done, total) -> done + 1 to total })
+                        }
                     }
-                    state.update { it.copy(detailsProgress = it.detailsProgress?.let { (done, total) -> done + 1 to total }) }
                 }
+                    .awaitAll()
             }
-                .awaitAll()
             state.update { it.copy(detailsProgress = null) }
         }
     }
@@ -235,10 +264,10 @@ abstract class SearchViewModel(
     }
 
     fun search() {
-        val query = state.value.searchQuery
+        val query = state.value.searchQuery.orEmpty()
         val sourceFilter = state.value.sourceFilter
 
-        if (query.isNullOrBlank()) return
+        if (query.isBlank() && !state.value.filters.isActive) return
 
         val sameQuery = this.lastQuery == query
         if (sameQuery && this.lastSourceFilter == sourceFilter) return
@@ -275,7 +304,11 @@ abstract class SearchViewModel(
 
                     try {
                         val page = withContext(coroutineDispatcher) {
-                            source.getSearchManga(1, query, source.getFilterList())
+                            if (query.isBlank()) {
+                                source.getPopularManga(1)
+                            } else {
+                                source.getSearchManga(1, query, source.getFilterList())
+                            }
                         }
 
                         val titles = page.mangas
@@ -294,6 +327,8 @@ abstract class SearchViewModel(
                 }
             }
                 .awaitAll()
+
+            if (state.value.filters.isActive) loadFilterDetails()
         }
     }
 
@@ -353,6 +388,11 @@ abstract class SearchViewModel(
                 .groupBy { it.lowercase() }
                 .map { (_, names) -> names.first() to names.size }
                 .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+                .let { seen ->
+                    // The usual ones are offered from the start, before there is anything searched
+                    val known = seen.map { it.first.lowercase() }.toSet()
+                    seen + COMMON_TAGS.filter { it.lowercase() !in known }.map { it to 0 }
+                }
         }
 
         fun statusOf(manga: Manga): Long = details[manga.id]?.status ?: manga.status
@@ -432,6 +472,12 @@ data class MangaDetails(val status: Long, val genres: List<String>)
 private fun <T> Set<T>.toggled(value: T): Set<T> = if (value in this) this - value else this + value
 
 private const val MAX_DETAIL_REQUESTS = 120
+
+private val COMMON_TAGS = listOf(
+    "Action", "Adventure", "Comedy", "Drama", "Fantasy", "Harem", "Historical", "Horror", "Isekai", "Josei",
+    "Martial Arts", "Mecha", "Mystery", "Psychological", "Romance", "School Life", "Sci-Fi", "Seinen",
+    "Shoujo", "Shounen", "Slice of Life", "Sports", "Supernatural", "Thriller", "Tragedy", "Webtoon",
+)
 
 sealed interface SearchItemResult {
     data object Loading : SearchItemResult

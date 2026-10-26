@@ -156,15 +156,9 @@ fun SearchFilterSheet(
                             onToggleTag(tag)
                             query = ""
                         },
-                        label = { Text(text = "$tag · $count") },
+                        label = { Text(text = if (count > 0) "$tag · $count" else tag) },
                     )
                 }
-            }
-            if (availableTags.isEmpty() && typed.isEmpty()) {
-                Text(
-                    text = stringResource(MR.strings.search_tags_empty),
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }
