@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
 import mihon.domain.manga.model.toDomainManga
 import tachiyomi.core.common.preference.toggle
@@ -32,6 +34,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.source.local.isLocal
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 abstract class SearchViewModel(
@@ -53,8 +56,21 @@ abstract class SearchViewModel(
         state.update(function)
     }
 
-    private val coroutineDispatcher = Dispatchers.IO.limitedParallelism(5)
-    private val detailsDispatcher = Dispatchers.IO.limitedParallelism(10)
+    // A source that never answers must not hold up the rest, so these only count requests in flight; a
+    // request that takes too long is abandoned (its thread is left to end by itself) instead of waited for.
+    private val requestSlots = Semaphore(10)
+    private val detailsSlots = Semaphore(12)
+    private val sourceSlots = ConcurrentHashMap<Long, Semaphore>()
+
+    private suspend fun <T> abandonable(timeout: Duration, block: suspend () -> T): T {
+        val request = viewModelScope.async(Dispatchers.IO) { block() }
+        try {
+            return withTimeout(timeout) { request.await() }
+        } catch (e: Throwable) {
+            request.cancel()
+            throw e
+        }
+    }
     private var searchJob: Job? = null
     private var chapterCountsJob: Job? = null
     private var detailsJob: Job? = null
@@ -207,14 +223,17 @@ abstract class SearchViewModel(
                 pending.map { entry ->
                     async {
                         try {
-                            val manga = withTimeout(CHAPTER_COUNT_TIMEOUT) {
-                                withContext(detailsDispatcher) {
-                                    entry.source.getMangaUpdate(
-                                        manga = entry.manga.toSManga(),
-                                        chapters = emptyList(),
-                                        fetchDetails = true,
-                                        fetchChapters = false,
-                                    )
+                            // Few at a time per source, as they tend to throttle and queue the rest
+                            val manga = sourceSlots.getOrPut(entry.source.id) { Semaphore(2) }.withPermit {
+                                detailsSlots.withPermit {
+                                    abandonable(DETAILS_TIMEOUT) {
+                                        entry.source.getMangaUpdate(
+                                            manga = entry.manga.toSManga(),
+                                            chapters = emptyList(),
+                                            fetchDetails = true,
+                                            fetchChapters = false,
+                                        )
+                                    }
                                 }
                             }.manga
                             val details = MangaDetails(
@@ -222,6 +241,8 @@ abstract class SearchViewModel(
                                 genres = manga.getGenres().orEmpty(),
                             )
                             state.update { it.copy(details = it.details + (entry.manga.id to details)) }
+                        } catch (e: TimeoutCancellationException) {
+                            // Too slow, left without details
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -254,7 +275,7 @@ abstract class SearchViewModel(
                 async {
                     val count = try {
                         withTimeout(CHAPTER_COUNT_TIMEOUT) {
-                            withContext(coroutineDispatcher) {
+                            withContext(Dispatchers.IO) {
                                 entry.source.getMangaUpdate(
                                     manga = entry.manga.toSManga(),
                                     chapters = emptyList(),
@@ -329,13 +350,13 @@ abstract class SearchViewModel(
                     }
 
                     try {
-                        val page = withContext(coroutineDispatcher) {
+                        val page = requestSlots.withPermit { abandonable(SEARCH_TIMEOUT) {
                             if (query.isBlank()) {
                                 source.getPopularManga(1)
                             } else {
                                 source.getSearchManga(1, query, source.getFilterList())
                             }
-                        }
+                        } }
 
                         val titles = page.mangas
                             .map { it.toDomainManga(source.id) }
@@ -376,8 +397,8 @@ abstract class SearchViewModel(
                 async {
                     val pageNumber = (sourcePages[source.id] ?: 1) + 1
                     try {
-                        val page = withTimeout(LOAD_MORE_TIMEOUT) {
-                            withContext(coroutineDispatcher) {
+                        val page = requestSlots.withPermit {
+                            abandonable(LOAD_MORE_TIMEOUT) {
                                 if (query.isBlank()) {
                                     source.getPopularManga(pageNumber)
                                 } else {
@@ -395,6 +416,8 @@ abstract class SearchViewModel(
                         sourcePages[source.id] = pageNumber
                         sourceHasNext[source.id] = page.hasNextPage && titles.isNotEmpty()
                         updateItem(source, SearchItemResult.Success(known + titles))
+                    } catch (e: TimeoutCancellationException) {
+                        sourceHasNext[source.id] = false
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -539,6 +562,8 @@ private fun buildUnifiedGroups(items: Map<Source, SearchItemResult>): List<Unifi
 }
 
 private val CHAPTER_COUNT_TIMEOUT = 12.seconds
+private val DETAILS_TIMEOUT = 15.seconds
+private val SEARCH_TIMEOUT = 30.seconds
 private val LOAD_MORE_TIMEOUT = 25.seconds
 
 enum class SourceFilter {
