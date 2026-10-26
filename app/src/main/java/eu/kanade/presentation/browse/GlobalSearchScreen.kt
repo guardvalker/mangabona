@@ -24,7 +24,9 @@ import eu.kanade.tachiyomi.ui.browse.source.globalsearch.SourceFilter
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.UnifiedGroup
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
 fun GlobalSearchScreen(
@@ -41,6 +43,31 @@ fun GlobalSearchScreen(
     onClickGroup: (UnifiedGroup) -> Unit,
 ) {
     var showFilterSheet by remember { mutableStateOf(false) }
+
+    val needsDetails = state.filters.statuses.isNotEmpty() || state.filters.tags.isNotEmpty()
+    val progress = state.detailsProgress
+    val statusText = when {
+        !state.filters.isActive -> null
+        progress != null && needsDetails -> stringResource(
+            MR.strings.search_filter_checking,
+            progress.first,
+            progress.second,
+            state.unifiedGroups.size,
+        )
+        needsDetails && state.total > 0 -> stringResource(
+            MR.strings.search_filter_summary,
+            state.unifiedGroups.size,
+            state.titlesWithDetails,
+            state.unifiedGroupsUnfiltered.size,
+        )
+        else -> null
+    }?.let { text ->
+        if (state.searchQuery.isNullOrBlank()) {
+            text + "\n" + stringResource(MR.strings.search_filter_popular_note)
+        } else {
+            text
+        }
+    }
 
     Scaffold(
         topBar = { scrollBehavior ->
@@ -59,6 +86,7 @@ fun GlobalSearchScreen(
                 filters = state.filters,
                 availableTags = state.availableTags,
                 detailsProgress = state.detailsProgress,
+                statusText = statusText,
                 onClickFilter = { showFilterSheet = true },
                 onChangeFilters = onApplyFilters,
             )

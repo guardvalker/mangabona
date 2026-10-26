@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +55,7 @@ fun GlobalSearchToolbar(
     availableTags: List<Pair<String, Int>> = emptyList(),
     onClickFilter: () -> Unit = {},
     detailsProgress: Pair<Int, Int>? = null,
+    statusText: String? = null,
     onChangeFilters: (SearchFilters) -> Unit = {},
 ) {
     Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -71,6 +71,13 @@ fun GlobalSearchToolbar(
             if (progress in 1..<total) {
                 LinearProgressIndicator(
                     progress = { progress / total.toFloat() },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(),
+                )
+            } else if (detailsProgress != null && detailsProgress.second > 0) {
+                LinearProgressIndicator(
+                    progress = { detailsProgress.first / detailsProgress.second.toFloat() },
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth(),
@@ -146,18 +153,6 @@ fun GlobalSearchToolbar(
                         onClick = { onChangeFilters(filters.copy(library = LibraryFilter.Any)) },
                     )
                 }
-
-                if (detailsProgress != null) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text(
-                        text = stringResource(
-                            MR.strings.search_filter_loading,
-                            detailsProgress.first,
-                            detailsProgress.second,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
             } else {
                 FilterChip(
                     selected = onlyShowHasResults,
@@ -175,6 +170,15 @@ fun GlobalSearchToolbar(
                     },
                 )
             }
+        }
+
+        if (statusText != null) {
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium, vertical = 4.dp),
+            )
         }
 
         HorizontalDivider()

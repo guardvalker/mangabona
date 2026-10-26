@@ -53,6 +53,7 @@ abstract class SearchViewModel(
     }
 
     private val coroutineDispatcher = Dispatchers.IO.limitedParallelism(5)
+    private val detailsDispatcher = Dispatchers.IO.limitedParallelism(10)
     private var searchJob: Job? = null
     private var chapterCountsJob: Job? = null
     private var detailsJob: Job? = null
@@ -161,6 +162,8 @@ abstract class SearchViewModel(
         if (detailsJob?.isActive == true) return
 
         detailsJob = viewModelScope.launch(Dispatchers.IO) {
+            var done = 0
+            var total = 0
             while (isActive) {
                 val pending = state.value.unifiedGroupsUnfiltered
                     .filter { group -> group.entries.none { state.value.hasDetails(it.manga) } }
@@ -170,12 +173,13 @@ abstract class SearchViewModel(
                 if (pending.isEmpty()) break
 
                 detailsTried += pending.map { it.manga.id }
-                state.update { it.copy(detailsProgress = 0 to pending.size) }
+                total += pending.size
+                state.update { it.copy(detailsProgress = done to total) }
                 pending.map { entry ->
                     async {
                         try {
                             val manga = withTimeout(CHAPTER_COUNT_TIMEOUT) {
-                                withContext(coroutineDispatcher) {
+                                withContext(detailsDispatcher) {
                                     entry.source.getMangaUpdate(
                                         manga = entry.manga.toSManga(),
                                         chapters = emptyList(),
@@ -194,9 +198,8 @@ abstract class SearchViewModel(
                         } catch (e: Exception) {
                             // Left without details, so a filter won't match it
                         }
-                        state.update {
-                            it.copy(detailsProgress = it.detailsProgress?.let { (done, total) -> done + 1 to total })
-                        }
+                        done++
+                        state.update { it.copy(detailsProgress = done to total) }
                     }
                 }
                     .awaitAll()
@@ -383,6 +386,9 @@ abstract class SearchViewModel(
         fun statusOf(manga: Manga): Long = details[manga.id]?.status ?: manga.status
 
         fun genresOf(manga: Manga): List<String> = details[manga.id]?.genres ?: manga.genre.orEmpty()
+
+        /** Titles whose status or tags are known, which is all a filter on them can go by */
+        val titlesWithDetails: Int get() = unifiedGroupsUnfiltered.count { g -> g.entries.any { hasDetails(it.manga) } }
 
         fun hasDetails(manga: Manga): Boolean = manga.id in details || manga.status != 0L || !manga.genre.isNullOrEmpty()
 
